@@ -1,0 +1,12 @@
+version: '3.3'
+
+services:
+  proxy:
+    build: .
+    command: bash -c "ls -a && go run MatchingEngine.go"
+    volumes:
+      - "./src:/src"
+      - "./logs:/var/log/erss"
+    ports:
+      - "12345:12345"
+    tty: true
