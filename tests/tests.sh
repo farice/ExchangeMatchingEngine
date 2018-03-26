@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
-echo Exchange server is up
+echo Testing Server Availability
+echo "hello" | nc localhost 12345
+cat ../logs/exchange.log
 
 echo Conclude test
