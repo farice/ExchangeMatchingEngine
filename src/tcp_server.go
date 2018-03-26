@@ -5,6 +5,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"net"
 	"strconv"
+	"strings"
 )
 
 // Connections holds info about client and net connection
@@ -24,7 +25,7 @@ type server struct {
 // Read Connection data from channel
 func (c *Connection) listen() {
 	reader := bufio.NewReader(c.conn)
-
+	
 	// while(1)
 	for {
 		message_length, err := reader.ReadString('\n')
@@ -33,6 +34,8 @@ func (c *Connection) listen() {
 			c.Server.onClientConnectionClosed(c, err)
 			return
 		}
+
+		message_length = strings.TrimSuffix(message_length, "\n")
 
 		// message_length should indicate number of bytes of XML to read
 		len_msg, err := strconv.Atoi(message_length)
