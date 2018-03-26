@@ -8,6 +8,6 @@ import (
 func (c *Connection) handleRequest(req []byte) {
   // New Message Received
   log.WithFields(log.Fields{
-  "message": req,
+  "message": string(req),
 }).Info("New message received")
 }

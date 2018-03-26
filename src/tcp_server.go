@@ -23,9 +23,9 @@ type server struct {
 }
 
 // Read Connection data from channel
-func (c *Connection) listen() {
+func (c *Connection) listen() {9
 	reader := bufio.NewReader(c.conn)
-	
+
 	// while(1)
 	for {
 		message_length, err := reader.ReadString('\n')
@@ -48,6 +48,7 @@ func (c *Connection) listen() {
 		msg := make([]byte, len_msg)
 
 		bytes_read, err := reader.Read(msg)
+		// ensure that bytes read matches length specified of XML request
 		if err != nil || bytes_read != len_msg {
 			c.conn.Close()
 			c.Server.onClientConnectionClosed(c, err)
