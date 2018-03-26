@@ -11,4 +11,4 @@ ADD ./src /src
 RUN go get github.com/sirupsen/logrus
 
 RUN chmod +x /config/entrypoint.sh
-RUN chmod +rx MatchingEngine.go
+RUN chmod +rx matching_engine.go

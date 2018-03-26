@@ -1,7 +1,6 @@
 package main
 
 import (
-	"./tcp_server"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"fmt"
@@ -50,9 +49,12 @@ func init() {
 func main() {
 	var clientCount = 0
 
-	server := tcp_server.New("exchange:12345")
+	// addr: exchange, port: 12345
+	server := NewTCPServer("exchange:12345")
 
-	server.OnNewClient(func(c *tcp_server.Client) {
+	// MARK: - Implement new client, message, and closed connection callbacks
+
+	server.OnNewConnection(func(c *Connection) {
 		// New Client Connected
 		log.WithFields(log.Fields{
     "client count":  clientCount,
@@ -62,13 +64,20 @@ func main() {
 		c.Send("Hello")
 
 	})
-	server.OnNewMessage(func(c *tcp_server.Client, message string) {
+
+
+	server.OnNewMessage(func(c *Connection, message string) {
 		// New Message Received
 		log.WithFields(log.Fields{
     "message": message,
   }).Info("New message received")
+
+
+
 	})
-	server.OnClientConnectionClosed(func(c *tcp_server.Client, err error) {
+
+
+	server.OnClientConnectionClosed(func(c *Connection, err error) {
 		// Lost connection with Client
 		log.WithFields(log.Fields{
     "error": err,
