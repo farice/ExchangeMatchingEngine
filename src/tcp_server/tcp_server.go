@@ -2,7 +2,7 @@ package tcp_server
 
 import (
 	"bufio"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"net"
 )
 
@@ -90,7 +90,7 @@ func (s *server) Listen() {
 
 // Creates new tcp server instance
 func New(address string) *server {
-	log.Println("Creating server with address", address)
+	log.Info("Creating server with address: ", address)
 	server := &server{
 		address: address,
 	}

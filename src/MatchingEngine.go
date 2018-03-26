@@ -2,41 +2,45 @@ package main
 
 import (
 	"./tcp_server"
-	"github.com/golang/glog"
+	log "github.com/sirupsen/logrus"
 	"os"
-	"flag"
-	"fmt"
 	)
 
-func usage() {
-	fmt.Fprintf(os.Stderr, "usage: example -stderrthreshold=[INFO|WARN|FATAL] -log_dir=[string]\n", )
-	flag.PrintDefaults()
-	os.Exit(2)
-}
-
 func init() {
-	flag.Usage = usage
-	// NOTE: This next line is key you have to call flag.Parse() for the command line 
-	// options or "flags" that are defined in the glog module to be picked up.
-	flag.Parse()
+	// Log as JSON instead of the default ASCII formatter.
+  //log.SetFormatter(&log.JSONFormatter{})
+
+  // Output to stdout instead of the default stderr
+  // Can be any io.Writer, see below for File example
+  log.SetOutput(os.Stdout)
+
+  // Only log the warning severity or above.
+  //log.SetLevel(log.WarnLevel)
 }
 
 func main() {
-	server := tcp_server.New("127.0.0.1:12345")
+	var clientCount = 0
+
+	server := tcp_server.New("localhost:12345")
 
 	server.OnNewClient(func(c *tcp_server.Client) {
 		// New Client Connected
-		glog.Info("New client connection")
+		log.WithFields(log.Fields{
+    "client count":  clientCount,
+  }).Info("New client connection")
+		clientCount += 1
+
 		c.Send("Hello")
-		glog.Flush()
+
 	})
 	server.OnNewMessage(func(c *tcp_server.Client, message string) {
 		// New Message Received
-		glog.Info("New message received")
+		log.Info("New message received")
 	})
 	server.OnClientConnectionClosed(func(c *tcp_server.Client, err error) {
 		// Lost connection with Client
-		glog.Info("New client connection")
+		log.Info("New client connection")
+
 	})
 
 	server.Listen()
