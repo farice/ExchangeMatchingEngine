@@ -17,4 +17,4 @@ before_install:
   - docker-compose up -d
   - docker ps
 
-script: /tests/tests.sh
+script: cd tests && ./tests.sh
