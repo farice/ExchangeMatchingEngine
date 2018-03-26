@@ -23,7 +23,7 @@ type server struct {
 }
 
 // Read Connection data from channel
-func (c *Connection) listen() {9
+func (c *Connection) listen() {
 	reader := bufio.NewReader(c.conn)
 
 	// while(1)
