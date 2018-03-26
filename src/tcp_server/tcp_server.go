@@ -14,7 +14,7 @@ type Client struct {
 
 // TCP server
 type server struct {
-	address                  string // Address to open connection: localhost:9999
+	address                  string // Address to open connection
 	onNewClientCallback      func(c *Client)
 	onClientConnectionClosed func(c *Client, err error)
 	onNewMessage             func(c *Client, message string)
