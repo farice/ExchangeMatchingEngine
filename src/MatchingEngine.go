@@ -50,7 +50,7 @@ func init() {
 func main() {
 	var clientCount = 0
 
-	server := tcp_server.New("localhost:12345")
+	server := tcp_server.New("exchange:12345")
 
 	server.OnNewClient(func(c *tcp_server.Client) {
 		// New Client Connected
@@ -72,7 +72,7 @@ func main() {
 		// Lost connection with Client
 		log.WithFields(log.Fields{
     "error": err,
-  }).Info("New client connection")
+  }).Info("Connection closed")
 
 	})
 
