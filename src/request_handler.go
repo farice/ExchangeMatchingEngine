@@ -5,7 +5,7 @@ import (
 )
 
 // Send bytes to Connection
-func (c *Connection) handleRequest(req string) {
+func (c *Connection) handleRequest(req []byte) {
   // New Message Received
   log.WithFields(log.Fields{
   "message": req,

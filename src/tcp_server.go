@@ -4,6 +4,7 @@ import (
 	"bufio"
 	log "github.com/sirupsen/logrus"
 	"net"
+	"strconv"
 )
 
 // Connections holds info about client and net connection
@@ -17,7 +18,7 @@ type server struct {
 	address                  string // Address to open connection
 	onNewConnectionCallback      func(c *Connection)
 	onClientConnectionClosed func(c *Connection, err error)
-	onNewMessage             func(c *Connection, message string)
+	onNewMessage             func(c *Connection, message []byte)
 }
 
 // Read Connection data from channel
@@ -26,13 +27,31 @@ func (c *Connection) listen() {
 
 	// while(1)
 	for {
-		message, err := reader.ReadString('\n')
+		message_length, err := reader.ReadString('\n')
 		if err != nil {
 			c.conn.Close()
 			c.Server.onClientConnectionClosed(c, err)
 			return
 		}
-		c.Server.onNewMessage(c, message)
+
+		// message_length should indicate number of bytes of XML to read
+		len_msg, err := strconv.Atoi(message_length)
+		if err != nil {
+			c.conn.Close()
+			c.Server.onClientConnectionClosed(c, err)
+			return
+		}
+
+		msg := make([]byte, len_msg)
+
+		bytes_read, err := reader.Read(msg)
+		if err != nil || bytes_read != len_msg {
+			c.conn.Close()
+			c.Server.onClientConnectionClosed(c, err)
+			return
+		}
+
+		c.Server.onNewMessage(c, msg)
 	}
 }
 
@@ -69,7 +88,7 @@ func (s *server) OnClientConnectionClosed(callback func(c *Connection, err error
 }
 
 // Called when Connection receives new message
-func (s *server) OnNewMessage(callback func(c *Connection, message string)) {
+func (s *server) OnNewMessage(callback func(c *Connection, message []byte)) {
 	s.onNewMessage = callback
 }
 
@@ -102,7 +121,7 @@ func NewTCPServer(address string) *server {
 	}
 
 	server.OnNewConnection(func(c *Connection) {})
-	server.OnNewMessage(func(c *Connection, message string) {})
+	server.OnNewMessage(func(c *Connection, message []byte) {})
 	server.OnClientConnectionClosed(func(c *Connection, err error) {})
 
 	return server

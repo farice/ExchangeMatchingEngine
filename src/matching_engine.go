@@ -66,7 +66,7 @@ func main() {
 	})
 
 
-	server.OnNewMessage(func(c *Connection, message string) {
+	server.OnNewMessage(func(c *Connection, message []byte) {
 		c.handleRequest(message)
 
 	})
