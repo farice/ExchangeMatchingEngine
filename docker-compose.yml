@@ -3,7 +3,7 @@ version: '3.3'
 services:
   exchange:
     build: .
-    command: bash -c "ls -a && go run tcp_server.go matching_engine.go"
+    command: bash -c "ls -a && go run tcp_server.go request_handler.go matching_engine.go"
     volumes:
       - "./src:/src"
       - "./logs:/var/log/erss"

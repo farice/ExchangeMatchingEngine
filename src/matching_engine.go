@@ -67,12 +67,7 @@ func main() {
 
 
 	server.OnNewMessage(func(c *Connection, message string) {
-		// New Message Received
-		log.WithFields(log.Fields{
-    "message": message,
-  }).Info("New message received")
-
-
+		c.handleRequest(message)
 
 	})
 
