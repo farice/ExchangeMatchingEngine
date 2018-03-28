@@ -10,6 +10,11 @@ import (
 )
 
 // Remember to capitalize field names so they are exported
+type Transaction struct {
+	XMLName xml.Name `xml:"transactions"`
+	Id string `xml:"id,attr"`
+}
+
 type Account struct {
 	XMLName xml.Name `xml:"account"`
 	Id string `xml:"id,attr"`
@@ -230,6 +235,21 @@ type Symbol struct {
 
 							if inElement == "transactions" {
 								// TODO: - transactions case
+								var trans Transaction
+								err := decoder.DecodeElement(&trans, &se)
+								if err != nil {
+									log.WithFields(log.Fields{
+										"Error": err,
+										}).Error("Decoding error, transactions")
+
+										// TODO - Handle error
+										break
+									}
+
+								log.WithFields(log.Fields{
+									"parsed": trans,
+									}).Info("Transactions")
+
 							}
 							default:
 							}
