@@ -23,6 +23,21 @@ type Symbol struct {
 
 			}
 
+			func createAccount(Account* acct) {
+				// This creates a new account with the given unique ID and balance (in USD).
+				// The account has no positions. Attempting to create an account that already
+				// exists is an error.
+			}
+
+			func createSymbol(Account* acct) {
+				// This creates the specified symbol. The symbol tag can have one or more
+				//children which are <account id="ID">NUM</account> These indicate that
+				// NUM shares of the symbol being created should be placed into the account
+				// with the given ID. Note that this creation is legal even if sym already
+				// exists: in such a case, it is used to create more shares of that symbol
+				//and add them to existing accounts.
+			}
+
 			func parseXML(req []byte) {
 				decoder := xml.NewDecoder(bytes.NewReader(req))
 				var inElement string
@@ -52,14 +67,31 @@ type Symbol struct {
 									// symbol create
 									case "symbol":
 										var symb Symbol
-										decoder.DecodeElement(&symb, &se)
+										err := decoder.DecodeElement(&symb, &se)
+										if err != nil {
+											log.WithFields(log.Fields{
+												"Error": err,
+												}).Error("Decoding error, symbol")
+
+											// TODO - Handle error
+											break
+										}
 										log.WithFields(log.Fields{
 											"XML": symb,
 											}).Info("New create command: Symbol")
 									// symbol create
 									case "account":
 										var acct Account
-										decoder.DecodeElement(&acct, &se)
+										err := decoder.DecodeElement(&acct, &se)
+										if err != nil {
+											log.WithFields(log.Fields{
+												"Error": err,
+												}).Error("Decoding error, symbol")
+
+											// TODO - Handle error
+											break
+										}
+
 										log.WithFields(log.Fields{
 											"XML": acct,
 											}).Info("New create command: Account")
