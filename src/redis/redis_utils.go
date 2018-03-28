@@ -30,6 +30,19 @@ func Get(key string) ([]byte, error) {
   return data, err
 }
 
+func GetField(key string, field string) ([]byte, error) {
+
+  conn := Pool.Get()
+  defer conn.Close()
+
+  var data []byte
+  data, err := redis.Bytes(conn.Do("HGET", key, field))
+  if err != nil {
+    return data, fmt.Errorf("error getting key %s: %v", key, err)
+  }
+  return data, err
+}
+
 func Set(key string, value []byte) error {
 
   conn := Pool.Get()
@@ -42,6 +55,22 @@ func Set(key string, value []byte) error {
       v = v[0:12] + "..."
     }
     return fmt.Errorf("error setting key %s to %s: %v", key, v, err)
+  }
+  return err
+}
+
+// For object storage
+func SetField(key string, field string, value []byte) error {
+  conn := Pool.Get()
+  defer conn.Close()
+
+  _, err := conn.Do("HMSET", key, field, value)
+  if err != nil {
+    v := string(value)
+    if len(v) > 15 {
+      v = v[0:12] + "..."
+    }
+    return fmt.Errorf("error setting key %s and field %s to %s: %v", key, field, v, err)
   }
   return err
 }

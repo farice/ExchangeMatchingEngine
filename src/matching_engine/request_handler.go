@@ -28,20 +28,23 @@ type Symbol struct {
 		// This creates a new account with the given unique ID and balance (in USD).
 		// The account has no positions. Attempting to create an account that already
 		// exists is an error.
-		ex, _ := redis.Exists("acct_" + acct.Id + "_balance")
-		if acct.Id == "" || acct.Balance == "" || ex {
+		ex, _ := redis.Exists("acct:" + acct.Id + ":balance")
+		if acct.Id == "" || acct.Balance == "" {
 			// TODO: - Throw and handle error
+			return
+		}
+		if ex {
 			log.WithFields(log.Fields{
 				"ID": acct.Id,
 				}).Info("Duplicate account")
 			return
 		}
 
-		// Redis key-value set
-		redis.Set("acct_" + acct.Id + "_balance", []byte(acct.Balance))
+		// Redis HMSET, maps key to hashmap of fields to values
+		redis.SetField("acct:" + acct.Id, "balance", []byte(acct.Balance))
 
-		// TEST: - Retrieve key and log
-		bal , _ := redis.Get("acct_" + acct.Id  + "_balance")
+		// TEST: - Retrieve key + field, then log
+		bal , _ := redis.GetField("acct:" + acct.Id, "balance")
 		log.WithFields(log.Fields{
 			"ID": acct.Id,
 			"Balance": string(bal),
@@ -57,7 +60,7 @@ type Symbol struct {
 		// with the given ID. Note that this creation is legal even if sym already
 		// exists: in such a case, it is used to create more shares of that symbol
 		//and add them to existing accounts.
-		ex, _ := redis.Exists("sym_" + sym.Sym)
+		ex, _ := redis.Exists("sym:" + sym.Sym)
 		if (ex) {
 
 		} else {
