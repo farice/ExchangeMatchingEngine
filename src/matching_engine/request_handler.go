@@ -31,6 +31,9 @@ type Symbol struct {
 		ex, _ := redis.Exists("acct_" + acct.Id + "_balance")
 		if acct.Id == "" || acct.Balance == "" || ex {
 			// TODO: - Throw and handle error
+			log.WithFields(log.Fields{
+				"ID": acct.Id,
+				}).Info("Duplicate account")
 			return
 		}
 
@@ -40,6 +43,7 @@ type Symbol struct {
 		// TEST: - Retrieve key and log
 		bal , _ := redis.Get("acct_" + acct.Id  + "_balance")
 		log.WithFields(log.Fields{
+			"ID": acct.Id,
 			"Balance": string(bal),
 			}).Info("Create account with balance")
 		// END TEST
