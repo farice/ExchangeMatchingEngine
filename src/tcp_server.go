@@ -106,7 +106,7 @@ func (s *server) Listen() {
 
 	for {
 		conn, _ := listener.Accept()
- 		client_connection := &Connection{
+		client_connection := &Connection{
 			conn:   conn,
 			Server: s,
 		}
