@@ -12,7 +12,7 @@ import (
 type Account struct {
 	XMLName xml.Name `xml:"account"`
 	Id string `xml:"id,attr"`
-	Balance float64 `xml:"balance,attr"`
+	Balance string `xml:"balance,attr"`
 }
 
 type Symbol struct {
@@ -20,7 +20,7 @@ type Symbol struct {
 	Sym string `xml:"sym,attr"`
 	Accounts []struct {
 		Id string `xml:"id,attr"`
-		Amount float64 `xml:",innerxml"`
+		Amount string `xml:",innerxml"`
 		} `xml:"account"`
 
 	}
@@ -85,7 +85,8 @@ type Symbol struct {
 				ex, _ := redis.HExists("acct:" + rcv_acct.Id + ":positions", sym.Sym)
 
 				if ex {
-					redis.HIncrByFloat("acct:" + rcv_acct.Id + ":positions", sym.Sym, rcv_acct.Amount)
+					amt_float, _ := strconv.ParseFloat(rcv_acct.Amount, 64)
+					redis.HIncrByFloat("acct:" + rcv_acct.Id + ":positions", sym.Sym, amt_float)
 				} else {
 					redis.SetField("acct:" + rcv_acct.Id + ":positions", sym.Sym, rcv_acct.Amount)
 				}
