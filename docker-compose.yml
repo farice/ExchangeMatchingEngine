@@ -7,7 +7,7 @@ services:
     build: .
     command: bash -c "ls -a && go install github.com/farice/EME/matching_engine && matching_engine"
     volumes:
-      - "./src:/src"
+      - "./src:/go/src/github.com/farice/EME/"
       - "./logs:/var/log/erss"
     ports:
       - "12345:12345"

@@ -5,13 +5,14 @@ import (
 	"encoding/xml"
 	"bytes"
 	"github.com/farice/EME/redis"
+	"strconv"
 )
 
 // Remember to capitalize field names so they are exported
 type Account struct {
 	XMLName xml.Name `xml:"account"`
 	Id string `xml:"id,attr"`
-	Balance string `xml:"balance,attr"`
+	Balance float64 `xml:"balance,attr"`
 }
 
 type Symbol struct {
@@ -19,7 +20,7 @@ type Symbol struct {
 	Sym string `xml:"sym,attr"`
 	Accounts []struct {
 		Id string `xml:"id,attr"`
-		Amount string `xml:",innerxml"`
+		Amount float64 `xml:",innerxml"`
 		} `xml:"account"`
 
 	}
@@ -29,7 +30,7 @@ type Symbol struct {
 		// The account has no positions. Attempting to create an account that already
 		// exists is an error.
 		ex, _ := redis.Exists("acct:" + acct.Id + ":balance")
-		if acct.Id == "" || acct.Balance == "" {
+		if acct.Id == "" {
 			// TODO: - Throw and handle error
 			return
 		}
@@ -41,14 +42,22 @@ type Symbol struct {
 		}
 
 		// Redis HMSET, maps key to hashmap of fields to values
-		redis.SetField("acct:" + acct.Id, "balance", []byte(acct.Balance))
+		err := redis.SetField("acct:" + acct.Id, "balance", acct.Balance)
+
+		if err != nil {
+			log.WithFields(log.Fields{
+				"Error": err,
+				}).Error("error settings account")
+		}
 
 		// TEST: - Retrieve key + field, then log
 		bal , _ := redis.GetField("acct:" + acct.Id, "balance")
+		bal_float, _ := strconv.ParseFloat(string(bal.([]byte)), 64)
 		log.WithFields(log.Fields{
 			"ID": acct.Id,
-			"Balance": string(bal),
-			}).Info("Create account with balance")
+			"Balance": bal_float,
+			"Verify_Balance": acct.Balance,
+			}).Info("Created account")
 		// END TEST
 
 	}
@@ -61,12 +70,40 @@ type Symbol struct {
 		// exists: in such a case, it is used to create more shares of that symbol
 		//and add them to existing accounts.
 		ex, _ := redis.Exists("sym:" + sym.Sym)
-		if (ex) {
+		if !ex {
+			redis.Set("sym:" + sym.Sym, "")
+		}
 
-		} else {
+		for _, rcv_acct := range sym.Accounts {
+			ex, _ := redis.Exists("acct:" + rcv_acct.Id)
+			if !ex {
+				// TODO:- Handle error, account does not exist
+				return
+			} else {
+				// acct:ID:positions is a hashmap of all of the user's positions
+				ex, _ := redis.HExists("acct:" + rcv_acct.Id + ":positions", sym.Sym)
+
+				if ex {
+					redis.HIncrByFloat("acct:" + rcv_acct.Id + ":positions", sym.Sym, rcv_acct.Amount)
+				} else {
+					redis.SetField("acct:" + rcv_acct.Id + ":positions", sym.Sym, rcv_acct.Amount)
+				}
+
+			}
+
+			// TEST: - Retrieve key + field, then log
+			bal , _ := redis.GetField("acct:" + rcv_acct.Id + ":positions", sym.Sym)
+			bal_float, _ := strconv.ParseFloat(string(bal.([]byte)), 64)
+			log.WithFields(log.Fields{
+				"ID": rcv_acct.Id,
+				"Position": bal_float,
+				"Symbol": sym.Sym,
+				}).Info("Added shares to account")
+			// END TEST
 
 		}
-	}
+    // element is the element from someSlice for where we are
+}
 
 	func parseXML(req []byte) {
 		decoder := xml.NewDecoder(bytes.NewReader(req))

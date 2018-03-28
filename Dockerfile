@@ -1,6 +1,5 @@
 FROM golang:1.8
 
-RUN mkdir /src
 WORKDIR /src
 
 RUN mkdir /config
