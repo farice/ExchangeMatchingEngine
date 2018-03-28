@@ -4,6 +4,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"encoding/xml"
 	"bytes"
+	"github.com/farice/EME/redis"
 )
 
 // Remember to capitalize field names so they are exported
@@ -27,15 +28,37 @@ type Symbol struct {
 		// This creates a new account with the given unique ID and balance (in USD).
 		// The account has no positions. Attempting to create an account that already
 		// exists is an error.
+		ex, _ := redis.Exists("acct_" + acct.Id + "_balance")
+		if acct.Id == "" || acct.Balance == "" || ex {
+			// TODO: - Throw and handle error
+			return
+		}
+
+		// Redis key-value set
+		redis.Set("acct_" + acct.Id + "_balance", []byte(acct.Balance))
+
+		// TEST: - Retrieve key and log
+		bal , _ := redis.Get("acct_" + acct.Id  + "_balance")
+		log.WithFields(log.Fields{
+			"Balance": string(bal),
+			}).Info("Create account with balance")
+		// END TEST
+
 	}
 
-	func createSymbol(acct *Account) {
+	func createSymbol(sym *Symbol) {
 		// This creates the specified symbol. The symbol tag can have one or more
 		//children which are <account id="ID">NUM</account> These indicate that
 		// NUM shares of the symbol being created should be placed into the account
 		// with the given ID. Note that this creation is legal even if sym already
 		// exists: in such a case, it is used to create more shares of that symbol
 		//and add them to existing accounts.
+		ex, _ := redis.Exists("sym_" + sym.Sym)
+		if (ex) {
+
+		} else {
+
+		}
 	}
 
 	func parseXML(req []byte) {
@@ -79,7 +102,10 @@ type Symbol struct {
 									log.WithFields(log.Fields{
 										"XML": symb,
 										}).Info("New create command: Symbol")
-										// symbol create
+
+										createSymbol(&symb)
+
+										// account create
 									case "account":
 										var acct Account
 										err := decoder.DecodeElement(&acct, &se)
@@ -95,6 +121,9 @@ type Symbol struct {
 											log.WithFields(log.Fields{
 												"XML": acct,
 												}).Info("New create command: Account")
+
+											createAccount(&acct)
+
 											default:
 
 											}

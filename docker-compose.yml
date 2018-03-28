@@ -5,7 +5,7 @@ services:
     image: redis
   exchange:
     build: .
-    command: bash -c "ls -a && go run redis_utils.go tcp_server.go request_handler.go matching_engine.go"
+    command: bash -c "ls -a && go install github.com/farice/EME/matching_engine && matching_engine"
     volumes:
       - "./src:/src"
       - "./logs:/var/log/erss"
