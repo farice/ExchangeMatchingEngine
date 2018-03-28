@@ -23,13 +23,13 @@ type Symbol struct {
 
 			}
 
-			func createAccount(Account* acct) {
+			func createAccount(acct *Account) {
 				// This creates a new account with the given unique ID and balance (in USD).
 				// The account has no positions. Attempting to create an account that already
 				// exists is an error.
 			}
 
-			func createSymbol(Account* acct) {
+			func createSymbol(acct *Account) {
 				// This creates the specified symbol. The symbol tag can have one or more
 				//children which are <account id="ID">NUM</account> These indicate that
 				// NUM shares of the symbol being created should be placed into the account
