@@ -62,7 +62,7 @@ func init() {
 					}).Info("New client connection")
 					clientCount += 1
 
-					c.Send("Hello")
+					c.Send("Hello\n")
 
 				})
 

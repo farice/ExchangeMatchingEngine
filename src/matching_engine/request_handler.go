@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"github.com/farice/EME/redis"
 	"strconv"
+	"fmt"
 )
 
 // Remember to capitalize field names so they are exported
@@ -25,20 +26,33 @@ type Symbol struct {
 
 	}
 
-	func createAccount(acct *Account) {
+	type CreatedResponse struct {
+		XMLName xml.Name `xml:"created"`
+		Sym string `xml:"sym,attr,omitempty"`
+		Id string `xml:"id,attr,omitempty"`
+	}
+
+	type ErrorResponse struct {
+		XMLName xml.Name `xml:"error"`
+		Sym string `xml:"sym,attr,omitempty"`
+		Id string `xml:"id,attr,omitempty"`
+		Reason string `xml:",innerxml"`
+	}
+
+	func createAccount(acct *Account) (error) {
 		// This creates a new account with the given unique ID and balance (in USD).
 		// The account has no positions. Attempting to create an account that already
 		// exists is an error.
 		ex, _ := redis.Exists("acct:" + acct.Id)
 		if acct.Id == "" {
 			// TODO: - Throw and handle error
-			return
+			return nil
 		}
 		if ex {
 			log.WithFields(log.Fields{
 				"ID": acct.Id,
 				}).Info("Duplicate account")
-			return
+			return fmt.Errorf("Duplicate account")
 		}
 
 		// Redis HMSET, maps key to hashmap of fields to values
@@ -48,7 +62,7 @@ type Symbol struct {
 			log.WithFields(log.Fields{
 				"Error": err,
 				}).Error("error setting account")
-				return
+				return fmt.Errorf("Error creating account")
 		}
 
 		// TEST: - Retrieve key + field, then log
@@ -61,6 +75,7 @@ type Symbol struct {
 			}).Info("Created account")
 		// END TEST
 
+		return nil
 	}
 
 	func createSymbol(sym *Symbol) {
@@ -107,7 +122,8 @@ type Symbol struct {
     // element is the element from someSlice for where we are
 }
 
-	func parseXML(req []byte) {
+	func parseXML(req []byte) (results string) {
+		results += "<results>\n"
 		decoder := xml.NewDecoder(bytes.NewReader(req))
 		var inElement string
 		for {
@@ -168,7 +184,18 @@ type Symbol struct {
 												"XML": acct,
 												}).Info("New create command: Account")
 
-											createAccount(&acct)
+											err = createAccount(&acct)
+											if err == nil {
+												succ := CreatedResponse{Id: acct.Id}
+												if succ_string, err := xml.MarshalIndent(succ, "", "    "); err == nil {
+													results += string(succ_string)
+												}
+											} else {
+												fail := ErrorResponse{Id: acct.Id, Reason: err.Error()}
+												if fail_string, err := xml.MarshalIndent(fail, "", "    "); err == nil {
+													results += string(fail_string) + "\n"
+												}
+											}
 
 											default:
 
@@ -183,14 +210,20 @@ type Symbol struct {
 										}
 									}
 								}
+
+							if inElement == "transactions" {
+								// TODO: - transactions case
+							}
 							default:
 							}
 						}
+						results += "</results>"
+						return results
 					}
 
 					// Send bytes to Connection
 					func (c *Connection) handleRequest(req []byte) {
 						// New Message Received
-						parseXML(req)
-
+						results := parseXML(req)
+						c.Send(results)
 					}
