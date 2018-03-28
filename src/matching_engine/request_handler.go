@@ -78,7 +78,7 @@ type Symbol struct {
 		return nil
 	}
 
-	func createSymbol(sym *Symbol) {
+	func createSymbol(sym *Symbol) (error){
 		// This creates the specified symbol. The symbol tag can have one or more
 		//children which are <account id="ID">NUM</account> These indicate that
 		// NUM shares of the symbol being created should be placed into the account
@@ -94,7 +94,11 @@ type Symbol struct {
 			ex, _ := redis.Exists("acct:" + rcv_acct.Id)
 			if !ex {
 				// TODO:- Handle error, account does not exist
-				return
+				log.WithFields(log.Fields{
+					"ID": rcv_acct.Id,
+					}).Error("Account with ID does not exist")
+				return fmt.Errorf("Account with ID %s does not exist", rcv_acct.Id)
+
 			} else {
 				// acct:ID:positions is a hashmap of all of the user's positions
 				ex, _ := redis.HExists("acct:" + rcv_acct.Id + ":positions", sym.Sym)
@@ -119,6 +123,8 @@ type Symbol struct {
 			// END TEST
 
 		}
+
+		return nil
     // element is the element from someSlice for where we are
 }
 
@@ -165,7 +171,18 @@ type Symbol struct {
 										"XML": symb,
 										}).Info("New create command: Symbol")
 
-										createSymbol(&symb)
+										err = createSymbol(&symb)
+										if err == nil {
+											succ := CreatedResponse{Sym: symb.Sym}
+											if succ_string, err := xml.MarshalIndent(succ, "", "    "); err == nil {
+												results += string(succ_string) + "\n"
+											}
+										} else {
+											fail := ErrorResponse{Sym: symb.Sym, Reason: err.Error()}
+											if fail_string, err := xml.MarshalIndent(fail, "", "    "); err == nil {
+												results += string(fail_string) + "\n"
+											}
+										}
 
 										// account create
 									case "account":
@@ -188,7 +205,7 @@ type Symbol struct {
 											if err == nil {
 												succ := CreatedResponse{Id: acct.Id}
 												if succ_string, err := xml.MarshalIndent(succ, "", "    "); err == nil {
-													results += string(succ_string)
+													results += string(succ_string) + "\n"
 												}
 											} else {
 												fail := ErrorResponse{Id: acct.Id, Reason: err.Error()}
