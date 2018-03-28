@@ -29,7 +29,7 @@ type Symbol struct {
 		// This creates a new account with the given unique ID and balance (in USD).
 		// The account has no positions. Attempting to create an account that already
 		// exists is an error.
-		ex, _ := redis.Exists("acct:" + acct.Id + ":balance")
+		ex, _ := redis.Exists("acct:" + acct.Id)
 		if acct.Id == "" {
 			// TODO: - Throw and handle error
 			return
@@ -47,7 +47,8 @@ type Symbol struct {
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Error": err,
-				}).Error("error settings account")
+				}).Error("error setting account")
+				return
 		}
 
 		// TEST: - Retrieve key + field, then log
