@@ -31,6 +31,13 @@ type Symbol struct {
 
 	}
 
+	type Order struct {
+		XMLName xml.Name `xml:"order"`
+		Sym string `xml:"sym,attr"`
+		Amount string `xml:"amount,attr"`
+		Limit string `xml:"limit,attr"`
+	}
+
 	type CreatedResponse struct {
 		XMLName xml.Name `xml:"created"`
 		Sym string `xml:"sym,attr,omitempty"`
@@ -234,23 +241,56 @@ type Symbol struct {
 								}
 
 							if inElement == "transactions" {
-								// TODO: - transactions case
-								var trans Transaction
-								err := decoder.DecodeElement(&trans, &se)
-								if err != nil {
-									log.WithFields(log.Fields{
-										"Error": err,
-										}).Error("Decoding error, transactions")
 
-										// TODO - Handle error
-										break
-									}
+								trans_acct_id := se.Attr[0].Value
 
 								log.WithFields(log.Fields{
-									"parsed": trans,
-									}).Info("Transactions")
+									}).Info("Transactions on Account ID")
+
+									for {
+										// now we look, in order, at which create operations the user requests...
+										token_create, _ := decoder.Token()
+										if token_create == nil {
+											break
+										}
+										switch se := token_create.(type) {
+										case xml.StartElement:
+											inElement = se.Name.Local
+											switch inElement {
+												// symbol create
+											case "order":
+												var ord Order
+												err := decoder.DecodeElement(&ord, &se)
+												if err != nil {
+													log.WithFields(log.Fields{
+														"Error": err,
+														}).Error("Decoding error, symbol")
+
+														// TODO - Handle error
+														break
+											}
+
+											log.WithFields(log.Fields{
+												"parsed": ord,
+												}).Info("Order")
+
+											case "cancel":
+												// TODO -
+											case "query":
+												// TODO -
+											default:
+
+											}
+										case xml.EndElement:
+											inElement = se.Name.Local
+											// we've reached the end of this create chunk
+											if inElement == "transactions" {
+												break
+											}
+										}
 
 							}
+						}
 							default:
 							}
 						}
