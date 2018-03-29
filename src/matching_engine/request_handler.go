@@ -241,10 +241,15 @@ type Symbol struct {
 								}
 
 							if inElement == "transactions" {
-
+								// TODO - Search for key "id" rather than assuming that is it the only key
+								if se.Attr[0].Name.Local != "id" {
+									log.Error("Did not supply ID to perform transactions on")
+									break
+								}
 								trans_acct_id := se.Attr[0].Value
 
 								log.WithFields(log.Fields{
+									"Account ID": trans_acct_id ,
 									}).Info("Transactions on Account ID")
 
 									for {
@@ -268,7 +273,7 @@ type Symbol struct {
 
 														// TODO - Handle error
 														break
-											}
+													}
 
 											log.WithFields(log.Fields{
 												"parsed": ord,
