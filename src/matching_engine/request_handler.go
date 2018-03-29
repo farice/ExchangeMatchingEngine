@@ -87,11 +87,84 @@ type Symbol struct {
 		Reason string `xml:",innerxml"`
 	}
 
-	func handleOrder() {
+	func(order *Order) handleBuy(acctId string, transId_str string, sym string, order_amt float64, limit_f float64) (err error) {
+		// check if user has enough USD in their account
 
+		bal , _ := redis.GetField("acct:" + acctId, "balance")
+		bal_float, _ := strconv.ParseFloat(string(bal.([]byte)), 64)
+
+		if order_amt * limit_f < bal_float {
+			log.WithFields(log.Fields{
+				"buy amount (USD)": order_amt * limit_f,
+				"balance": bal_float,
+				}).Info("Insufficient funds")
+			err = fmt.Errorf("Insufficient funds")
+			return
+		}
+
+		// get open sell with lowest sell value
+		var members []string
+		members, err = redis.Zrange("open-sell:" + sym, 0, 0, true)
+		if err != nil {
+			return
+		}
+
+
+		log.WithFields(log.Fields{
+			"members": members,
+			}).Info("Found open sell order...")
+
+		err = redis.Zadd("open-buy:" + sym, order.Limit, transId_str)
+		if err != nil {
+			return
+		}
+
+		return
 	}
 
-	func createOrder(acctId string, order *Order) (transId int, err error) {
+	func (order *Order) handleSell(acctId string, transId_str string, sym string, order_amt float64, limit_f float64) (err error) {
+
+		// check if user has enough of SYM in their account
+		var shares_owned interface{}
+		shares_owned , err = redis.GetField("acct:" + acctId + ":positions", sym)
+		if err != nil {
+			return
+		}
+		if shares_owned == nil {
+				err = fmt.Errorf("User owns no shares of %s", sym)
+				return
+		}
+		so_float, _ := strconv.ParseFloat(string(shares_owned.([]byte)), 64)
+
+		if -1 * order_amt > so_float {
+			log.WithFields(log.Fields{
+				"sell amount": -1 * order_amt,
+				"shares owned": so_float,
+				}).Info("Insufficient funds")
+			err = fmt.Errorf("Insufficient funds")
+			return
+		}
+
+		// get open sell with lowest sell value
+		var members []string
+		members, err = redis.Zrange("open-buy:" + sym, -1, -1, true)
+		if err != nil {
+			return
+		}
+
+
+		log.WithFields(log.Fields{
+			"members": members,
+			}).Info("Found open buy order...")
+
+		err = redis.Zadd("open-sell:" + sym, order.Limit, transId_str)
+		if err != nil {
+			return
+		}
+		return
+	}
+
+	func (order *Order) createOrder(acctId string) (transId int, err error) {
 		log.Info("Creating order...")
 		transId = IncAndGet()
 		transId_str := strconv.Itoa(transId)
@@ -102,77 +175,13 @@ type Symbol struct {
 		// BUY
 		if order_amt > 0 {
 
-			// check if user has enough USD in their account
-
-			bal , _ := redis.GetField("acct:" + acctId, "balance")
-			bal_float, _ := strconv.ParseFloat(string(bal.([]byte)), 64)
-
-			if order_amt * limit_f < bal_float {
-				log.WithFields(log.Fields{
-					"buy amount (USD)": order_amt * limit_f,
-					"balance": bal_float,
-					}).Info("Insufficient funds")
-				err = fmt.Errorf("Insufficient funds")
-				return
-			}
-
-			// get open sell with lowest sell value
-			var members []string
-			members, err = redis.Zrange("open-sell:" + sym, 0, 0, true)
-			if err != nil {
-				return
-			}
-
-
-			log.WithFields(log.Fields{
-				"members": members,
-				}).Info("Found open sell order...")
-
-			err = redis.Zadd("open-buy:" + sym, order.Limit, transId_str)
-			if err != nil {
-				return
-			}
+			err = order.handleBuy(acctId, transId_str, sym, order_amt, limit_f)
 
 			// SELL
 			} else {
 
-				// check if user has enough of SYM in their account
-				var shares_owned interface{}
-				shares_owned , err = redis.GetField("acct:" + acctId + ":positions", sym)
-				if err != nil {
-					return
-				}
-				if shares_owned == nil {
-						err = fmt.Errorf("User owns no shares of %s", sym)
-						return
-				}
-				so_float, _ := strconv.ParseFloat(string(shares_owned.([]byte)), 64)
+				err = order.handleSell(acctId, transId_str, sym, order_amt, limit_f)
 
-				if -1 * order_amt > so_float {
-					log.WithFields(log.Fields{
-						"sell amount": -1 * order_amt,
-						"shares owned": so_float,
-						}).Info("Insufficient funds")
-					err = fmt.Errorf("Insufficient funds")
-					return
-				}
-
-				// get open sell with lowest sell value
-				var members []string
-				members, err = redis.Zrange("open-buy:" + sym, -1, -1, true)
-				if err != nil {
-					return
-				}
-
-
-				log.WithFields(log.Fields{
-					"members": members,
-					}).Info("Found open buy order...")
-
-				err = redis.Zadd("open-sell:" + sym, order.Limit, transId_str)
-				if err != nil {
-					return
-				}
 			}
 			return
 		}
@@ -410,7 +419,7 @@ type Symbol struct {
 																									"parsed": ord,
 																									}).Info("Order")
 
-																									tr_id, err := createOrder(trans_acct_id, &ord)
+																									tr_id, err := ord.createOrder(trans_acct_id)
 																									if err == nil {
 																										succ := OpenResponse{TransactionID: strconv.Itoa(tr_id), Sym: ord.Sym, Amount: ord.Amount, Limit: ord.Limit}
 																										if succ_string, err := xml.MarshalIndent(succ, "", "    "); err == nil {
