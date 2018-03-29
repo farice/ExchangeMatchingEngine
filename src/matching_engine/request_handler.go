@@ -90,6 +90,19 @@ type Symbol struct {
 	func createOrder(acctId string, order *Order) (transId int, err error) {
 		log.Info("Creating order...")
 		transId = IncAndGet()
+		transId_str := strconv.Itoa(transId)
+		limit_f, _ := strconv.ParseFloat(order.Limit, 64)
+	if limit_f > 0 {
+		err := redis.Zadd("open-buy:" + order.Sym, order.Limit, transId_str)
+		if err != nil {
+			// TODO - Error
+		}
+		} else {
+			err := redis.Zadd("open-sell:" + order.Sym, order.Limit, transId_str)
+			if err != nil {
+				// TODO - Error
+			}
+		}
 		return
 	}
 
@@ -106,294 +119,294 @@ type Symbol struct {
 			log.WithFields(log.Fields{
 				"ID": acct.Id,
 				}).Info("Duplicate account")
-			return fmt.Errorf("Duplicate account")
-		}
+				return fmt.Errorf("Duplicate account")
+			}
 
-		// Redis HMSET, maps key to hashmap of fields to values
-		err := redis.SetField("acct:" + acct.Id, "balance", acct.Balance)
+			// Redis HMSET, maps key to hashmap of fields to values
+			err := redis.SetField("acct:" + acct.Id, "balance", acct.Balance)
 
-		if err != nil {
-			log.WithFields(log.Fields{
-				"Error": err,
-				}).Error("error setting account")
-				return fmt.Errorf("Error creating account")
-		}
-
-		// TEST: - Retrieve key + field, then log
-		bal , _ := redis.GetField("acct:" + acct.Id, "balance")
-		bal_float, _ := strconv.ParseFloat(string(bal.([]byte)), 64)
-		log.WithFields(log.Fields{
-			"ID": acct.Id,
-			"Balance": bal_float,
-			"Verify_Balance": acct.Balance,
-			}).Info("Created account")
-		// END TEST
-
-		return nil
-	}
-
-	func createSymbol(sym *Symbol) (error){
-		// This creates the specified symbol. The symbol tag can have one or more
-		//children which are <account id="ID">NUM</account> These indicate that
-		// NUM shares of the symbol being created should be placed into the account
-		// with the given ID. Note that this creation is legal even if sym already
-		// exists: in such a case, it is used to create more shares of that symbol
-		//and add them to existing accounts.
-		ex, _ := redis.Exists("sym:" + sym.Sym)
-		if !ex {
-			redis.Set("sym:" + sym.Sym, "")
-		}
-
-		for _, rcv_acct := range sym.Accounts {
-			ex, _ := redis.Exists("acct:" + rcv_acct.Id)
-			if !ex {
-				// TODO:- Handle error, account does not exist
+			if err != nil {
 				log.WithFields(log.Fields{
-					"ID": rcv_acct.Id,
-					}).Error("Account with ID does not exist")
-				return fmt.Errorf("Account with ID %s does not exist", rcv_acct.Id)
-
-			} else {
-				// acct:ID:positions is a hashmap of all of the user's positions
-				ex, _ := redis.HExists("acct:" + rcv_acct.Id + ":positions", sym.Sym)
-
-				if ex {
-					amt_float, _ := strconv.ParseFloat(rcv_acct.Amount, 64)
-					redis.HIncrByFloat("acct:" + rcv_acct.Id + ":positions", sym.Sym, amt_float)
-				} else {
-					redis.SetField("acct:" + rcv_acct.Id + ":positions", sym.Sym, rcv_acct.Amount)
+					"Error": err,
+					}).Error("error setting account")
+					return fmt.Errorf("Error creating account")
 				}
 
-			}
+				// TEST: - Retrieve key + field, then log
+				bal , _ := redis.GetField("acct:" + acct.Id, "balance")
+				bal_float, _ := strconv.ParseFloat(string(bal.([]byte)), 64)
+				log.WithFields(log.Fields{
+					"ID": acct.Id,
+					"Balance": bal_float,
+					"Verify_Balance": acct.Balance,
+					}).Info("Created account")
+					// END TEST
 
-			// TEST: - Retrieve key + field, then log
-			bal , _ := redis.GetField("acct:" + rcv_acct.Id + ":positions", sym.Sym)
-			bal_float, _ := strconv.ParseFloat(string(bal.([]byte)), 64)
-			log.WithFields(log.Fields{
-				"ID": rcv_acct.Id,
-				"Position": bal_float,
-				"Symbol": sym.Sym,
-				}).Info("Added shares to account")
-			// END TEST
+					return nil
+				}
 
-		}
+				func createSymbol(sym *Symbol) (error){
+					// This creates the specified symbol. The symbol tag can have one or more
+					//children which are <account id="ID">NUM</account> These indicate that
+					// NUM shares of the symbol being created should be placed into the account
+					// with the given ID. Note that this creation is legal even if sym already
+					// exists: in such a case, it is used to create more shares of that symbol
+					//and add them to existing accounts.
+					ex, _ := redis.Exists("sym:" + sym.Sym)
+					if !ex {
+						redis.Set("sym:" + sym.Sym, "")
+					}
 
-		return nil
-    // element is the element from someSlice for where we are
-}
+					for _, rcv_acct := range sym.Accounts {
+						ex, _ := redis.Exists("acct:" + rcv_acct.Id)
+						if !ex {
+							// TODO:- Handle error, account does not exist
+							log.WithFields(log.Fields{
+								"ID": rcv_acct.Id,
+								}).Error("Account with ID does not exist")
+								return fmt.Errorf("Account with ID %s does not exist", rcv_acct.Id)
 
-	func parseXML(req []byte) (results string) {
+								} else {
+									// acct:ID:positions is a hashmap of all of the user's positions
+									ex, _ := redis.HExists("acct:" + rcv_acct.Id + ":positions", sym.Sym)
 
-		decoder := xml.NewDecoder(bytes.NewReader(req))
-		var inElement string
-		for {
-			// Read tokens from the XML document in a stream.
-			token, _ := decoder.Token()
-			if token == nil {
-				break
-			}
-			// Inspect the type of the token just read.
-			switch se := token.(type) {
-			case xml.StartElement:
-				// If we just read a StartElement token
-				inElement = se.Name.Local
-				// ...and its name is "create"
-				if inElement == "create" {
-					results += "<results>\n"
-					for {
-						// now we look, in order, at which create operations the user requests...
-						token_create, _ := decoder.Token()
-						if token_create == nil {
-							break
-						}
-						switch se := token_create.(type) {
-						case xml.StartElement:
-							inElement = se.Name.Local
-							switch inElement {
-								// symbol create
-							case "symbol":
-								var symb Symbol
-								err := decoder.DecodeElement(&symb, &se)
-								if err != nil {
-									log.WithFields(log.Fields{
-										"Error": err,
-										}).Error("Decoding error, symbol")
-
-										// TODO - Handle error
-										break
-									}
-									log.WithFields(log.Fields{
-										"XML": symb,
-										}).Info("New create command: Symbol")
-
-										err = createSymbol(&symb)
-										if err == nil {
-											succ := CreatedResponse{Sym: symb.Sym}
-											if succ_string, err := xml.MarshalIndent(succ, "", "    "); err == nil {
-												results += string(succ_string) + "\n"
-											}
+									if ex {
+										amt_float, _ := strconv.ParseFloat(rcv_acct.Amount, 64)
+										redis.HIncrByFloat("acct:" + rcv_acct.Id + ":positions", sym.Sym, amt_float)
 										} else {
-											fail := ErrorCreateResponse{Sym: symb.Sym, Reason: err.Error()}
-											if fail_string, err := xml.MarshalIndent(fail, "", "    "); err == nil {
-												results += string(fail_string) + "\n"
-											}
+											redis.SetField("acct:" + rcv_acct.Id + ":positions", sym.Sym, rcv_acct.Amount)
 										}
 
-										// account create
-									case "account":
-										var acct Account
-										err := decoder.DecodeElement(&acct, &se)
-										if err != nil {
-											log.WithFields(log.Fields{
-												"Error": err,
-												}).Error("Decoding error, symbol")
-
-												// TODO - Handle error
-												break
-											}
-
-											log.WithFields(log.Fields{
-												"XML": acct,
-												}).Info("New create command: Account")
-
-											err = createAccount(&acct)
-											if err == nil {
-												succ := CreatedResponse{Id: acct.Id}
-												if succ_string, err := xml.MarshalIndent(succ, "", "    "); err == nil {
-													results += string(succ_string) + "\n"
-												}
-											} else {
-												fail := ErrorCreateResponse{Id: acct.Id, Reason: err.Error()}
-												if fail_string, err := xml.MarshalIndent(fail, "", "    "); err == nil {
-													results += string(fail_string) + "\n"
-												}
-											}
-
-											default:
-
-											}
-										case xml.EndElement:
-											inElement = se.Name.Local
-											// we've reached the end of this create chunk
-											if inElement == "create" {
-												break
-											}
-										default:
-										}
 									}
 
-									results += "</results>"
-									return results
+									// TEST: - Retrieve key + field, then log
+									bal , _ := redis.GetField("acct:" + rcv_acct.Id + ":positions", sym.Sym)
+									bal_float, _ := strconv.ParseFloat(string(bal.([]byte)), 64)
+									log.WithFields(log.Fields{
+										"ID": rcv_acct.Id,
+										"Position": bal_float,
+										"Symbol": sym.Sym,
+										}).Info("Added shares to account")
+										// END TEST
+
+									}
+
+									return nil
+									// element is the element from someSlice for where we are
 								}
 
-							if inElement == "transactions" {
-								// TODO - Search for key "id" rather than assuming that is it the only key
-								if se.Attr[0].Name.Local != "id" {
-									log.Error("Did not supply ID to perform transactions on")
-									break
-								}
-								trans_acct_id := se.Attr[0].Value
+								func parseXML(req []byte) (results string) {
 
-								log.WithFields(log.Fields{
-									"Account ID": trans_acct_id ,
-									}).Info("Transactions on Account ID")
-
-									results += "<results>\n"
+									decoder := xml.NewDecoder(bytes.NewReader(req))
+									var inElement string
 									for {
-										// now we look, in order, at which create operations the user requests...
-										token_create, _ := decoder.Token()
-										if token_create == nil {
+										// Read tokens from the XML document in a stream.
+										token, _ := decoder.Token()
+										if token == nil {
 											break
 										}
-										switch se := token_create.(type) {
+										// Inspect the type of the token just read.
+										switch se := token.(type) {
 										case xml.StartElement:
+											// If we just read a StartElement token
 											inElement = se.Name.Local
-											switch inElement {
-												// symbol create
-											case "order":
-												var ord Order
-												err := decoder.DecodeElement(&ord, &se)
-												if err != nil {
-													log.WithFields(log.Fields{
-														"Error": err,
-														}).Error("Decoding error, order")
-
-														// TODO - Handle error
+											// ...and its name is "create"
+											if inElement == "create" {
+												results += "<results>\n"
+												for {
+													// now we look, in order, at which create operations the user requests...
+													token_create, _ := decoder.Token()
+													if token_create == nil {
 														break
 													}
+													switch se := token_create.(type) {
+													case xml.StartElement:
+														inElement = se.Name.Local
+														switch inElement {
+															// symbol create
+														case "symbol":
+															var symb Symbol
+															err := decoder.DecodeElement(&symb, &se)
+															if err != nil {
+																log.WithFields(log.Fields{
+																	"Error": err,
+																	}).Error("Decoding error, symbol")
 
-											log.WithFields(log.Fields{
-												"parsed": ord,
-												}).Info("Order")
+																	// TODO - Handle error
+																	break
+																}
+																log.WithFields(log.Fields{
+																	"XML": symb,
+																	}).Info("New create command: Symbol")
 
-												tr_id, err := createOrder(trans_acct_id, &ord)
-												if err == nil {
-													succ := OpenResponse{TransactionID: strconv.Itoa(tr_id), Sym: ord.Sym, Amount: ord.Amount, Limit: ord.Limit}
-													if succ_string, err := xml.MarshalIndent(succ, "", "    "); err == nil {
-														results += string(succ_string) + "\n"
-													}
-												} else {
-													fail := ErrorTransResponse{Sym: ord.Sym, Amount: ord.Amount, Limit: ord.Limit, Reason: err.Error()}
-													if fail_string, err := xml.MarshalIndent(fail, "", "    "); err == nil {
-														results += string(fail_string) + "\n"
-													}
-												}
+																	err = createSymbol(&symb)
+																	if err == nil {
+																		succ := CreatedResponse{Sym: symb.Sym}
+																		if succ_string, err := xml.MarshalIndent(succ, "", "    "); err == nil {
+																			results += string(succ_string) + "\n"
+																		}
+																		} else {
+																			fail := ErrorCreateResponse{Sym: symb.Sym, Reason: err.Error()}
+																			if fail_string, err := xml.MarshalIndent(fail, "", "    "); err == nil {
+																				results += string(fail_string) + "\n"
+																			}
+																		}
 
-											case "cancel":
-												var cancel Cancel
-												err := decoder.DecodeElement(&cancel, &se)
-												if err != nil {
-													log.WithFields(log.Fields{
-														"Error": err,
-														}).Error("Decoding error, cancel")
+																		// account create
+																	case "account":
+																		var acct Account
+																		err := decoder.DecodeElement(&acct, &se)
+																		if err != nil {
+																			log.WithFields(log.Fields{
+																				"Error": err,
+																				}).Error("Decoding error, symbol")
 
-														// TODO - Handle error
-														break
-													}
+																				// TODO - Handle error
+																				break
+																			}
 
-											log.WithFields(log.Fields{
-												"parsed": cancel,
-												}).Info("Cancel")
+																			log.WithFields(log.Fields{
+																				"XML": acct,
+																				}).Info("New create command: Account")
 
-											case "query":
-												var qry Query
-												err := decoder.DecodeElement(&qry, &se)
-												if err != nil {
-													log.WithFields(log.Fields{
-														"Error": err,
-														}).Error("Decoding error, query")
+																				err = createAccount(&acct)
+																				if err == nil {
+																					succ := CreatedResponse{Id: acct.Id}
+																					if succ_string, err := xml.MarshalIndent(succ, "", "    "); err == nil {
+																						results += string(succ_string) + "\n"
+																					}
+																					} else {
+																						fail := ErrorCreateResponse{Id: acct.Id, Reason: err.Error()}
+																						if fail_string, err := xml.MarshalIndent(fail, "", "    "); err == nil {
+																							results += string(fail_string) + "\n"
+																						}
+																					}
 
-														// TODO - Handle error
-														break
-													}
+																				default:
 
-											log.WithFields(log.Fields{
-												"parsed": qry,
-												}).Info("Query")
-											default:
+																				}
+																			case xml.EndElement:
+																				inElement = se.Name.Local
+																				// we've reached the end of this create chunk
+																				if inElement == "create" {
+																					break
+																				}
+																			default:
+																			}
+																		}
 
-											}
-										case xml.EndElement:
-											inElement = se.Name.Local
-											// we've reached the end of this create chunk
-											if inElement == "transactions" {
-												break
-											}
-										}
+																		results += "</results>"
+																		return results
+																	}
 
-							}
-							results += "</results>"
-							return results
-						}
-							default:
-							}
-						}
-						return ""
-					}
+																	if inElement == "transactions" {
+																		// TODO - Search for key "id" rather than assuming that is it the only key
+																		if se.Attr[0].Name.Local != "id" {
+																			log.Error("Did not supply ID to perform transactions on")
+																			break
+																		}
+																		trans_acct_id := se.Attr[0].Value
 
-					// Send bytes to Connection
-					func (c *Connection) handleRequest(req []byte) {
-						// New Message Received
-						results := parseXML(req)
-						c.Send(results)
-					}
+																		log.WithFields(log.Fields{
+																			"Account ID": trans_acct_id ,
+																			}).Info("Transactions on Account ID")
+
+																			results += "<results>\n"
+																			for {
+																				// now we look, in order, at which create operations the user requests...
+																				token_create, _ := decoder.Token()
+																				if token_create == nil {
+																					break
+																				}
+																				switch se := token_create.(type) {
+																				case xml.StartElement:
+																					inElement = se.Name.Local
+																					switch inElement {
+																						// symbol create
+																					case "order":
+																						var ord Order
+																						err := decoder.DecodeElement(&ord, &se)
+																						if err != nil {
+																							log.WithFields(log.Fields{
+																								"Error": err,
+																								}).Error("Decoding error, order")
+
+																								// TODO - Handle error
+																								break
+																							}
+
+																							log.WithFields(log.Fields{
+																								"parsed": ord,
+																								}).Info("Order")
+
+																								tr_id, err := createOrder(trans_acct_id, &ord)
+																								if err == nil {
+																									succ := OpenResponse{TransactionID: strconv.Itoa(tr_id), Sym: ord.Sym, Amount: ord.Amount, Limit: ord.Limit}
+																									if succ_string, err := xml.MarshalIndent(succ, "", "    "); err == nil {
+																										results += string(succ_string) + "\n"
+																									}
+																									} else {
+																										fail := ErrorTransResponse{Sym: ord.Sym, Amount: ord.Amount, Limit: ord.Limit, Reason: err.Error()}
+																										if fail_string, err := xml.MarshalIndent(fail, "", "    "); err == nil {
+																											results += string(fail_string) + "\n"
+																										}
+																									}
+
+																								case "cancel":
+																									var cancel Cancel
+																									err := decoder.DecodeElement(&cancel, &se)
+																									if err != nil {
+																										log.WithFields(log.Fields{
+																											"Error": err,
+																											}).Error("Decoding error, cancel")
+
+																											// TODO - Handle error
+																											break
+																										}
+
+																										log.WithFields(log.Fields{
+																											"parsed": cancel,
+																											}).Info("Cancel")
+
+																										case "query":
+																											var qry Query
+																											err := decoder.DecodeElement(&qry, &se)
+																											if err != nil {
+																												log.WithFields(log.Fields{
+																													"Error": err,
+																													}).Error("Decoding error, query")
+
+																													// TODO - Handle error
+																													break
+																												}
+
+																												log.WithFields(log.Fields{
+																													"parsed": qry,
+																													}).Info("Query")
+																												default:
+
+																												}
+																											case xml.EndElement:
+																												inElement = se.Name.Local
+																												// we've reached the end of this create chunk
+																												if inElement == "transactions" {
+																													break
+																												}
+																											}
+
+																										}
+																										results += "</results>"
+																										return results
+																									}
+																								default:
+																								}
+																							}
+																							return ""
+																						}
+
+																						// Send bytes to Connection
+																						func (c *Connection) handleRequest(req []byte) {
+																							// New Message Received
+																							results := parseXML(req)
+																							c.Send(results)
+																						}
