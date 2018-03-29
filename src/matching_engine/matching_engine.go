@@ -4,6 +4,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"os"
 	"fmt"
+	"github.com/farice/EME/redis"
 )
 
 type StdOutHook struct{}
@@ -45,6 +46,13 @@ func init() {
 		// Only log the warning severity or above.
 		//log.SetLevel(log.WarnLevel)
 
+		// MARK: - Global Transaction ID Counter
+
+		ex, err := redis.Exists("TransactionCounter")
+		if !ex {
+			redis.Set("TransactionCounter", 0)
+		}
+		
 	}
 
 		func main() {

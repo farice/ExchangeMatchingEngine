@@ -10,24 +10,17 @@ import (
 	"sync"
 )
 
-// SafeCounter is safe to use concurrently.
-type SafeCounter struct {
-	count int
-	mux sync.Mutex
-}
-
 var (
-	TransCounter = SafeCounter{count: 0}
+	mux sync.Mutex
 )
 
-
 // Inc increments the counter for the given key.
-func (c *SafeCounter) IncAndGet ()(int) {
-	c.mux.Lock()
+func IncAndGet ()(int) {
+	mux.Lock()
 	// Lock so only one goroutine at a time can access c.count
-	c.count++
-	defer c.mux.Unlock()
-	return c.count
+	ct, _ := redis.Incr("TransactionCounter")
+	defer mux.Unlock()
+	return ct
 }
 
 // Remember to capitalize field names so they are exported
@@ -96,7 +89,7 @@ type Symbol struct {
 
 	func createOrder(acctId string, order *Order) (transId int, err error) {
 		log.Info("Creating order...")
-		transId = TransCounter.IncAndGet()
+		transId = IncAndGet()
 		return
 	}
 
