@@ -10,10 +10,6 @@ import (
 )
 
 // Remember to capitalize field names so they are exported
-type Transaction struct {
-	XMLName xml.Name `xml:"transactions"`
-	Id string `xml:"id,attr"`
-}
 
 type Account struct {
 	XMLName xml.Name `xml:"account"`
@@ -34,8 +30,34 @@ type Symbol struct {
 	type Order struct {
 		XMLName xml.Name `xml:"order"`
 		Sym string `xml:"sym,attr"`
-		Amount string `xml:"amount,attr"`
+		Amount string `xml:"amount,attr"` // negative means to sell
 		Limit string `xml:"limit,attr"`
+	}
+
+	type Cancel struct {
+		XMLName xml.Name `xml:"cancel"`
+		TransactionID string `xml:"id,attr"`
+	}
+
+	type Query struct {
+		XMLName xml.Name `xml:"query"`
+		TransactionID string `xml:"id,attr"`
+	}
+
+	type OpenResponse struct {
+		XMLName xml.Name `xml:"opened"`
+		TransactionID string `xml:"id,attr"`
+		Sym string `xml:"sym,attr"`
+		Amount string `xml:"amount,attr"` // negative means to sell
+		Limit string `xml:"limit,attr"`
+	}
+
+	type ErrorTransResponse struct {
+		XMLName xml.Name `xml:"error"`
+		Sym string `xml:"sym,attr"`
+		Amount string `xml:"amount,attr"` // negative means to sell
+		Limit string `xml:"limit,attr"`
+		Reason string `xml:",innerxml"`
 	}
 
 	type CreatedResponse struct {
@@ -44,7 +66,7 @@ type Symbol struct {
 		Id string `xml:"id,attr,omitempty"`
 	}
 
-	type ErrorResponse struct {
+	type ErrorCreateResponse struct {
 		XMLName xml.Name `xml:"error"`
 		Sym string `xml:"sym,attr,omitempty"`
 		Id string `xml:"id,attr,omitempty"`
@@ -141,7 +163,7 @@ type Symbol struct {
 }
 
 	func parseXML(req []byte) (results string) {
-		results += "<results>\n"
+
 		decoder := xml.NewDecoder(bytes.NewReader(req))
 		var inElement string
 		for {
@@ -157,6 +179,7 @@ type Symbol struct {
 				inElement = se.Name.Local
 				// ...and its name is "create"
 				if inElement == "create" {
+					results += "<results>\n"
 					for {
 						// now we look, in order, at which create operations the user requests...
 						token_create, _ := decoder.Token()
@@ -190,7 +213,7 @@ type Symbol struct {
 												results += string(succ_string) + "\n"
 											}
 										} else {
-											fail := ErrorResponse{Sym: symb.Sym, Reason: err.Error()}
+											fail := ErrorCreateResponse{Sym: symb.Sym, Reason: err.Error()}
 											if fail_string, err := xml.MarshalIndent(fail, "", "    "); err == nil {
 												results += string(fail_string) + "\n"
 											}
@@ -220,7 +243,7 @@ type Symbol struct {
 													results += string(succ_string) + "\n"
 												}
 											} else {
-												fail := ErrorResponse{Id: acct.Id, Reason: err.Error()}
+												fail := ErrorCreateResponse{Id: acct.Id, Reason: err.Error()}
 												if fail_string, err := xml.MarshalIndent(fail, "", "    "); err == nil {
 													results += string(fail_string) + "\n"
 												}
@@ -238,6 +261,9 @@ type Symbol struct {
 										default:
 										}
 									}
+
+									results += "</results>"
+									return results
 								}
 
 							if inElement == "transactions" {
@@ -269,7 +295,7 @@ type Symbol struct {
 												if err != nil {
 													log.WithFields(log.Fields{
 														"Error": err,
-														}).Error("Decoding error, symbol")
+														}).Error("Decoding error, order")
 
 														// TODO - Handle error
 														break
@@ -280,9 +306,36 @@ type Symbol struct {
 												}).Info("Order")
 
 											case "cancel":
-												// TODO -
+												var cancel Cancel
+												err := decoder.DecodeElement(&cancel, &se)
+												if err != nil {
+													log.WithFields(log.Fields{
+														"Error": err,
+														}).Error("Decoding error, cancel")
+
+														// TODO - Handle error
+														break
+													}
+
+											log.WithFields(log.Fields{
+												"parsed": cancel,
+												}).Info("Cancel")
+
 											case "query":
-												// TODO -
+												var qry Query
+												err := decoder.DecodeElement(&qry, &se)
+												if err != nil {
+													log.WithFields(log.Fields{
+														"Error": err,
+														}).Error("Decoding error, query")
+
+														// TODO - Handle error
+														break
+													}
+
+											log.WithFields(log.Fields{
+												"parsed": qry,
+												}).Info("Query")
 											default:
 
 											}
@@ -299,8 +352,7 @@ type Symbol struct {
 							default:
 							}
 						}
-						results += "</results>"
-						return results
+						return ""
 					}
 
 					// Send bytes to Connection
