@@ -7,7 +7,28 @@ import (
 	"github.com/farice/EME/redis"
 	"strconv"
 	"fmt"
+	"sync"
 )
+
+// SafeCounter is safe to use concurrently.
+type SafeCounter struct {
+	count int
+	mux sync.Mutex
+}
+
+var (
+	TransCounter = SafeCounter{count: 0}
+)
+
+
+// Inc increments the counter for the given key.
+func (c *SafeCounter) IncAndGet ()(int) {
+	c.mux.Lock()
+	// Lock so only one goroutine at a time can access c.count
+	c.count++
+	defer c.mux.Unlock()
+	return c.count
+}
 
 // Remember to capitalize field names so they are exported
 
@@ -73,9 +94,9 @@ type Symbol struct {
 		Reason string `xml:",innerxml"`
 	}
 
-	func createOrder(acctId string, order *Order) (transId string, err error) {
+	func createOrder(acctId string, order *Order) (transId int, err error) {
 		log.Info("Creating order...")
-
+		transId = TransCounter.IncAndGet()
 		return
 	}
 
@@ -314,7 +335,7 @@ type Symbol struct {
 
 												tr_id, err := createOrder(trans_acct_id, &ord)
 												if err == nil {
-													succ := OpenResponse{TransactionID: tr_id, Sym: ord.Sym, Amount: ord.Amount, Limit: ord.Limit}
+													succ := OpenResponse{TransactionID: strconv.Itoa(tr_id), Sym: ord.Sym, Amount: ord.Amount, Limit: ord.Limit}
 													if succ_string, err := xml.MarshalIndent(succ, "", "    "); err == nil {
 														results += string(succ_string) + "\n"
 													}

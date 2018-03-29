@@ -102,6 +102,20 @@ bool
   return err
 }
 
+// Every member of a Sorted Set is associated with score, that is used in order to take the sorted set ordered,
+// from the smallest to the greatest score. While members are unique, scores may be repeated.
+func Zadd(setName string, score string, member string) (error) {
+  conn := Pool.Get()
+  defer conn.Close()
+
+  _, err := conn.Do("ZADD", setName, score, member)
+
+  if err != nil {
+    return fmt.Errorf("error adding to set %s: %v", setName, err)
+  }
+  return err
+}
+
 func HExists(key string, field string) (bool, error) {
 
   conn := Pool.Get()
