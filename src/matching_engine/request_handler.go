@@ -106,9 +106,8 @@ type Symbol struct {
 		// TODO - Add to redis_utils API
 
 		conn := redis.Pool.Get()
-		_, err = conn.Do("HSET", "order:" + transId_str, "account", acctId,"account", acctId,"account", acctId,"account", acctId)
+		_, err = conn.Do("HSET", "order:" + transId_str, "account", acctId, "symbol", sym, "limit", order.Limit, "amount", order.Amount)
 	  conn.Close()
-
 		// get open sell with lowest sell value
 		var members []string
 		members, err = redis.Zrange("open-sell:" + sym, 0, 0, true)
