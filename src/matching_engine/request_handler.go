@@ -73,6 +73,12 @@ type Symbol struct {
 		Reason string `xml:",innerxml"`
 	}
 
+	func createOrder(acctId string, order *Order) (transId string, err error) {
+		log.Info("Creating order...")
+
+		return
+	}
+
 	func createAccount(acct *Account) (error) {
 		// This creates a new account with the given unique ID and balance (in USD).
 		// The account has no positions. Attempting to create an account that already
@@ -278,6 +284,7 @@ type Symbol struct {
 									"Account ID": trans_acct_id ,
 									}).Info("Transactions on Account ID")
 
+									results += "<results>\n"
 									for {
 										// now we look, in order, at which create operations the user requests...
 										token_create, _ := decoder.Token()
@@ -304,6 +311,19 @@ type Symbol struct {
 											log.WithFields(log.Fields{
 												"parsed": ord,
 												}).Info("Order")
+
+												tr_id, err := createOrder(trans_acct_id, &ord)
+												if err == nil {
+													succ := OpenResponse{TransactionID: tr_id, Sym: ord.Sym, Amount: ord.Amount, Limit: ord.Limit}
+													if succ_string, err := xml.MarshalIndent(succ, "", "    "); err == nil {
+														results += string(succ_string) + "\n"
+													}
+												} else {
+													fail := ErrorTransResponse{Sym: ord.Sym, Amount: ord.Amount, Limit: ord.Limit, Reason: err.Error()}
+													if fail_string, err := xml.MarshalIndent(fail, "", "    "); err == nil {
+														results += string(fail_string) + "\n"
+													}
+												}
 
 											case "cancel":
 												var cancel Cancel
@@ -348,6 +368,8 @@ type Symbol struct {
 										}
 
 							}
+							results += "</results>"
+							return results
 						}
 							default:
 							}
