@@ -102,6 +102,13 @@ type Symbol struct {
 			return
 		}
 
+		// add info to redis
+		// TODO - Add to redis_utils API
+
+		conn := redis.Pool.Get()
+		_, err = conn.Do("HSET", "order:" + transId_str, "account", acctId,"account", acctId,"account", acctId,"account", acctId)
+	  conn.Close()
+
 		// get open sell with lowest sell value
 		var members []string
 		members, err = redis.Zrange("open-sell:" + sym, 0, 0, true)
@@ -110,9 +117,20 @@ type Symbol struct {
 		}
 
 
-		log.WithFields(log.Fields{
-			"members": members,
-			}).Info("Found open sell order...")
+		if len(members) > 0 {
+				// get information on this matched order...
+				conn := redis.Pool.Get()
+  			data, _ := conn.Do("HGET", "order:" + members[0], "account")
+				conn.Close()
+
+				log.WithFields(log.Fields{
+					"members": members,
+					"data": data,
+					}).Info("Found open sell order...")
+
+				//err = redis.GetField("order:" + transId_str, "account", acctId)
+		}
+
 
 		err = redis.Zadd("open-buy:" + sym, order.Limit, transId_str)
 		if err != nil {
@@ -164,7 +182,7 @@ type Symbol struct {
 		return
 	}
 
-	func (order *Order) createOrder(acctId string) (transId int, err error) {
+	func (order *Order) openOrder(acctId string) (transId int, err error) {
 		log.Info("Creating order...")
 		transId = IncAndGet()
 		transId_str := strconv.Itoa(transId)
@@ -419,7 +437,7 @@ type Symbol struct {
 																									"parsed": ord,
 																									}).Info("Order")
 
-																									tr_id, err := ord.createOrder(trans_acct_id)
+																									tr_id, err := ord.openOrder(trans_acct_id)
 																									if err == nil {
 																										succ := OpenResponse{TransactionID: strconv.Itoa(tr_id), Sym: ord.Sym, Amount: ord.Amount, Limit: ord.Limit}
 																										if succ_string, err := xml.MarshalIndent(succ, "", "    "); err == nil {
