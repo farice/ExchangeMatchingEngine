@@ -87,20 +87,76 @@ type Symbol struct {
 		Reason string `xml:",innerxml"`
 	}
 
+	func handleOrder() {
+
+	}
+
 	func createOrder(acctId string, order *Order) (transId int, err error) {
 		log.Info("Creating order...")
 		transId = IncAndGet()
 		transId_str := strconv.Itoa(transId)
+		sym := order.Sym
+		order_amt, _ := strconv.ParseFloat(order.Amount, 64)
 		limit_f, _ := strconv.ParseFloat(order.Limit, 64)
-		if limit_f > 0 {
-			err := redis.Zadd("open-buy:" + order.Sym, order.Limit, transId_str)
-			if err != nil {
-				// TODO - Error
+
+		// BUY
+		if order_amt < 0 {
+
+			// check if user has enough USD in their account
+
+			bal , _ := redis.GetField("acct:" + acctId, "balance")
+			bal_float, _ := strconv.ParseFloat(string(bal.([]byte)), 64)
+
+			if order_amt * limit_f < bal_float {
+				err = fmt.Errorf("Insufficient funds")
+				return
 			}
+
+			// get open sell with lowest sell value
+			var members []string
+			members, err = redis.Zrange("open-sell:" + sym, 0, 0, true)
+			if err != nil {
+				return
+			}
+
+
+			log.WithFields(log.Fields{
+				"members": members,
+				}).Info("Found open sell order...")
+
+			err = redis.Zadd("open-buy:" + sym, order.Limit, transId_str)
+			if err != nil {
+				return
+			}
+
+			// SELL
 			} else {
-				err := redis.Zadd("open-sell:" + order.Sym, order.Limit, transId_str)
+
+				// check if user has enough of SYM in their account
+
+				bal , _ := redis.GetField("acct:" + acctId + ":positions", sym)
+				bal_float, _ := strconv.ParseFloat(string(bal.([]byte)), 64)
+
+				if -1 * order_amt * limit_f > bal_float {
+					err = fmt.Errorf("Insufficient funds")
+					return
+				}
+
+				// get open sell with lowest sell value
+				var members []string
+				members, err = redis.Zrange("open-buy:" + sym, -1, -1, true)
 				if err != nil {
-					// TODO - Error
+					return
+				}
+
+
+				log.WithFields(log.Fields{
+					"members": members,
+					}).Info("Found open sell order...")
+
+				err = redis.Zadd("open-sell:" + sym, order.Limit, transId_str)
+				if err != nil {
+					return
 				}
 			}
 			return

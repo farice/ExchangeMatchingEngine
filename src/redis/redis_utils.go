@@ -116,6 +116,20 @@ func Zadd(setName string, score string, member string) (error) {
   return err
 }
 
+func Zrange(setName string, start int, stop int, with_scores bool) (members []string, err error) {
+
+  conn := Pool.Get()
+  defer conn.Close()
+
+  if with_scores {
+    members, err = redis.Strings(conn.Do("ZRANGE", setName, start, stop, "WITHSCORES"))
+  } else {
+    members, err = redis.Strings(conn.Do("ZRANGE", setName, start, stop))
+  }
+
+  return
+}
+
 func HExists(key string, field string) (bool, error) {
 
   conn := Pool.Get()
