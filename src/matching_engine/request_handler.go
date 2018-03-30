@@ -8,18 +8,20 @@ import (
 	"strconv"
 	"fmt"
 	"sync"
+	redigo "github.com/gomodule/redigo/redis"
 )
 
 var (
-	mux sync.Mutex
+	counter_mux sync.Mutex
+	match_mux sync.Mutex // Mutex used to atomically match/execute orders
 )
 
 // Inc increments the counter for the given key.
 func IncAndGet ()(int) {
-	mux.Lock()
+	counter_mux.Lock()
 	// Lock so only one goroutine at a time can access c.count
 	ct, _ := redis.Incr("TransactionCounter")
-	defer mux.Unlock()
+	defer counter_mux.Unlock()
 	return ct
 }
 
@@ -87,6 +89,36 @@ type Symbol struct {
 		Reason string `xml:",innerxml"`
 	}
 
+	func executeOrder(
+		// buy order info
+		b_acctId string, b_sym string, b_limit string, b_amount string,
+		// sell order info
+		s_acctId string, s_sym string, s_limit string, s_amount string) {
+
+		log.WithFields(log.Fields{
+			"b_account_id": b_acctId,
+			"b_sym": b_sym,
+			"b_limit": b_limit,
+			"b_amount": b_amount,
+			"s_account_id": s_acctId,
+			"s_sym": s_sym,
+			"s_limit": s_limit,
+			"s_amount": s_amount,
+			}).Info("Matched open orders")
+
+			/*
+			ex, _ := redis.HExists("acct:" + b_acctId + ":positions", b_sym)
+
+
+			if ex {
+				amt_float, _ := strconv.ParseFloat(b_amount, 64)
+				redis.HIncrByFloat("acct:" + rcv_acct.Id + ":positions", sym.Sym, amt_float)
+				} else {
+				redis.SetField("acct:" + rcv_acct.Id + ":positions", sym.Sym, rcv_acct.Amount)
+				} */
+
+	}
+
 	func(order *Order) handleBuy(acctId string, transId_str string, sym string, order_amt float64, limit_f float64) (err error) {
 		// check if user has enough USD in their account
 
@@ -119,30 +151,48 @@ type Symbol struct {
 		}
 		// get open sell with lowest sell value
 		var members []string
+
+		match_mux.Lock()
+		defer match_mux.Unlock() // in case exception is thrown, unlock when stack closes
+
 		members, err = redis.Zrange("open-sell:" + sym, 0, 0, true)
 		if err != nil {
+			err = fmt.Errorf("Insufficient funds")
 			return
 		}
 
+		var orderUnmatched = true
 		if len(members) > 0 {
-				// get information on this matched order...
-				conn := redis.Pool.Get()
-  			data, _ := conn.Do("HMGET", "order:" + members[0], "account", "symbol", "limit", "amount")
-				conn.Close()
+			// get information on this matched order...
+			conn := redis.Pool.Get()
+			data, _ := redigo.Strings(conn.Do("HMGET", "order:" + members[0], "account", "symbol", "limit", "amount"))
+			conn.Close()
 
+			if len(data) != 4 {
 				log.WithFields(log.Fields{
-					"id": members[0],
-					"price": members[1],
 					"data": data,
-					}).Info("Found matching open sell order...")
+					"len(data)": len(data),
+					}).Error("Corrupted data")
 
-				//err = redis.GetField("order:" + transId_str, "account", acctId)
+				err = fmt.Errorf("Corrupted data: matched order info")
+				return
+			}
+
+			matched_limit_f, _ := strconv.ParseFloat(data[2], 64)
+			if (matched_limit_f < limit_f) {
+				orderUnmatched = false
+				executeOrder(acctId, sym, order.Limit, order.Amount, data[0], data[1], data[2], data[3])
+			}
+
+
 		}
 
-
-		err = redis.Zadd("open-buy:" + sym, order.Limit, transId_str)
-		if err != nil {
-			return
+		if orderUnmatched {
+			// No matches, add to open buy sorted set
+			err = redis.Zadd("open-buy:" + sym, order.Limit, transId_str)
+			if err != nil {
+				return
+			}
 		}
 
 		return
@@ -181,6 +231,9 @@ type Symbol struct {
 
 		// get open sell with lowest sell value
 		var members []string
+
+		match_mux.Lock()
+		defer match_mux.Unlock() // in case exception is thrown, unlock when stack closes
 		members, err = redis.Zrange("open-buy:" + sym, -1, -1, true)
 		if err != nil {
 			return
@@ -201,10 +254,14 @@ type Symbol struct {
 				//err = redis.GetField("order:" + transId_str, "account", acctId)
 		}
 
+		if len(members) == 0 {
+			// No matches, add to open sell sorted set
 		err = redis.Zadd("open-sell:" + sym, order.Limit, transId_str)
 		if err != nil {
 			return
 		}
+	}
+
 		return
 	}
 
