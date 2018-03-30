@@ -111,8 +111,12 @@ type Symbol struct {
 		// TODO - Add to redis_utils API
 
 		conn := redis.Pool.Get()
-		_, err = conn.Do("HSET", "order:" + transId_str, "account", acctId, "symbol", sym, "limit", order.Limit, "amount", order.Amount)
+		_, err = conn.Do("HMSET", "order:" + transId_str, "account", acctId, "symbol", sym, "limit", order.Limit, "amount", order.Amount)
 	  conn.Close()
+
+		if err != nil {
+			return
+		}
 		// get open sell with lowest sell value
 		var members []string
 		members, err = redis.Zrange("open-sell:" + sym, 0, 0, true)
@@ -120,20 +124,17 @@ type Symbol struct {
 			return
 		}
 
-		log.Info("order:" + transId_str)
-		log.Info("order:" + members[0])
-
 		if len(members) > 0 {
 				// get information on this matched order...
 				conn := redis.Pool.Get()
-  			data, _ := conn.Do("HGET", "order:" + members[0], "account")
+  			data, _ := conn.Do("HMGET", "order:" + members[0], "account", "symbol", "limit", "amount")
 				conn.Close()
 
 				log.WithFields(log.Fields{
 					"id": members[0],
 					"price": members[1],
 					"data": data,
-					}).Info("Found open sell order...")
+					}).Info("Found matching open sell order...")
 
 				//err = redis.GetField("order:" + transId_str, "account", acctId)
 		}
@@ -171,8 +172,12 @@ type Symbol struct {
 		}
 
 		conn := redis.Pool.Get()
-		_, err = conn.Do("HSET", "order:" + transId_str, "account", acctId, "symbol", sym, "limit", order.Limit, "amount", order.Amount)
+		_, err = conn.Do("HMSET", "order:" + transId_str, "account", acctId, "symbol", sym, "limit", order.Limit, "amount", order.Amount)
 	  conn.Close()
+
+		if err != nil {
+			return
+		}
 
 		// get open sell with lowest sell value
 		var members []string
@@ -181,21 +186,17 @@ type Symbol struct {
 			return
 		}
 
-		log.Info("order:" + transId_str)
-		log.Info("order:" + members[0])
-
-
 		if len(members) > 0 {
 				// get information on this matched order...
 				conn := redis.Pool.Get()
-  			data, _ := conn.Do("HGET", "order:" + members[0], "account")
+  			data, _ := conn.Do("HMGET", "order:" + members[0], "account", "symbol", "limit", "amount")
 				conn.Close()
 
 				log.WithFields(log.Fields{
 					"id": members[0],
 					"price": members[1],
 					"data": data,
-					}).Info("Found open buy order...")
+					}).Info("Found matching open buy order...")
 
 				//err = redis.GetField("order:" + transId_str, "account", acctId)
 		}
