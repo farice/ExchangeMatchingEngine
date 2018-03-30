@@ -239,22 +239,31 @@ type Symbol struct {
 			return
 		}
 
+		var orderUnmatched = true
 		if len(members) > 0 {
 				// get information on this matched order...
 				conn := redis.Pool.Get()
-  			data, _ := conn.Do("HMGET", "order:" + members[0], "account", "symbol", "limit", "amount")
+  			data, _ := redigo.Strings(conn.Do("HMGET", "order:" + members[0], "account", "symbol", "limit", "amount"))
 				conn.Close()
 
-				log.WithFields(log.Fields{
-					"id": members[0],
-					"price": members[1],
-					"data": data,
-					}).Info("Found matching open buy order...")
+				if len(data) != 4 {
+					log.WithFields(log.Fields{
+						"data": data,
+						"len(data)": len(data),
+						}).Error("Corrupted data")
+						err = fmt.Errorf("Corrupted data: matched order info")
+						return
+					}
 
+					matched_limit_f, _ := strconv.ParseFloat(data[2], 64)
+					if (matched_limit_f > limit_f) {
+						orderUnmatched = false
+						executeOrder(data[0], data[1], data[2], data[3], acctId, sym, order.Limit, order.Amount)
+					}
 				//err = redis.GetField("order:" + transId_str, "account", acctId)
 		}
 
-		if len(members) == 0 {
+		if orderUnmatched {
 			// No matches, add to open sell sorted set
 		err = redis.Zadd("open-sell:" + sym, order.Limit, transId_str)
 		if err != nil {
