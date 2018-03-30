@@ -93,7 +93,7 @@ type Symbol struct {
 		bal , _ := redis.GetField("acct:" + acctId, "balance")
 		bal_float, _ := strconv.ParseFloat(string(bal.([]byte)), 64)
 
-		if order_amt * limit_f < bal_float {
+		if order_amt * limit_f > bal_float {
 			log.WithFields(log.Fields{
 				"buy amount (USD)": order_amt * limit_f,
 				"balance": bal_float,
