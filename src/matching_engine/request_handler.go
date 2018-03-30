@@ -91,6 +91,11 @@ type Symbol struct {
 		// check if user has enough USD in their account
 
 		bal , _ := redis.GetField("acct:" + acctId, "balance")
+		if bal == nil {
+			// If a user has no balance, it either does not exist, or has no money
+				err = fmt.Errorf("User %s has balance 0", acctId)
+				return
+		}
 		bal_float, _ := strconv.ParseFloat(string(bal.([]byte)), 64)
 
 		if order_amt * limit_f > bal_float {
@@ -115,6 +120,8 @@ type Symbol struct {
 			return
 		}
 
+		log.Info("order:" + transId_str)
+		log.Info("order:" + members[0])
 
 		if len(members) > 0 {
 				// get information on this matched order...
@@ -123,7 +130,8 @@ type Symbol struct {
 				conn.Close()
 
 				log.WithFields(log.Fields{
-					"members": members,
+					"id": members[0],
+					"price": members[1],
 					"data": data,
 					}).Info("Found open sell order...")
 
@@ -162,6 +170,10 @@ type Symbol struct {
 			return
 		}
 
+		conn := redis.Pool.Get()
+		_, err = conn.Do("HSET", "order:" + transId_str, "account", acctId, "symbol", sym, "limit", order.Limit, "amount", order.Amount)
+	  conn.Close()
+
 		// get open sell with lowest sell value
 		var members []string
 		members, err = redis.Zrange("open-buy:" + sym, -1, -1, true)
@@ -169,10 +181,24 @@ type Symbol struct {
 			return
 		}
 
+		log.Info("order:" + transId_str)
+		log.Info("order:" + members[0])
 
-		log.WithFields(log.Fields{
-			"members": members,
-			}).Info("Found open buy order...")
+
+		if len(members) > 0 {
+				// get information on this matched order...
+				conn := redis.Pool.Get()
+  			data, _ := conn.Do("HGET", "order:" + members[0], "account")
+				conn.Close()
+
+				log.WithFields(log.Fields{
+					"id": members[0],
+					"price": members[1],
+					"data": data,
+					}).Info("Found open buy order...")
+
+				//err = redis.GetField("order:" + transId_str, "account", acctId)
+		}
 
 		err = redis.Zadd("open-sell:" + sym, order.Limit, transId_str)
 		if err != nil {
