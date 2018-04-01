@@ -141,6 +141,16 @@ type Symbol struct {
 			}
 		}
 
+		conn := redis.Pool.Get()
+		_, err = conn.Do("HSET", "order:" + s_trId, "amount", s_amt_f + sharesToExecute)
+		if err != nil {
+			return
+		}
+		_, err = conn.Do("HSET", "order:" + b_trId, "amount",b_amt_f - sharesToExecute)
+		if err != nil {
+			return
+		}
+		conn.Close()
 
 		if s_amt_f + sharesToExecute == 0 {
 			closeOpenOrder(false, sym, s_trId)
@@ -279,10 +289,6 @@ type Symbol struct {
 		"Amount Unexecuted": amountUnexecuted,
 		}).Info("Status")
 
-		_, err = conn.Do("HSET", "order:" + transId_str, "amount", amountUnexecuted)
-		if err != nil {
-			return
-		}
 
 		if amountUnexecuted > 0 {
 			// No matches, add to open buy sorted set
@@ -386,11 +392,6 @@ type Symbol struct {
 		"Amount Unexecuted": sharesRemaining,
 		}).Info("Status")
 
-		// update shares remaining to sell
-		_, err = conn.Do("HSET", "order:" + transId_str, "amount", sharesRemaining)
-		if err != nil {
-			return
-		}
 
 		// more shares to sell, still
 		if sharesRemaining < 0 {
