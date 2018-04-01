@@ -224,9 +224,6 @@ type Symbol struct {
 			return
 		}
 
-		// add info to redis
-		// TODO - Add to redis_utils API
-
 		var conn = redis.Pool.Get()
 		_, err = conn.Do("HMSET", "order:" + transId_str, "account", acctId, "symbol", sym, "limit", order.Limit, "amount", order.Amount, "origAmount", order.Amount)
 	  conn.Close()
@@ -244,7 +241,6 @@ type Symbol struct {
 
 		members, err = redis.Zrange("open-sell:" + sym, 0, 0, true)
 		if err != nil {
-			err = fmt.Errorf("Insufficient funds")
 			return
 		}
 
