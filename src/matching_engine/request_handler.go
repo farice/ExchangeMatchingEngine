@@ -96,7 +96,7 @@ type Symbol struct {
 		// buy order info
 		b_trId string, b_acctId string, b_sym string, b_limit string, b_amount string,
 		// sell order info
-		s_trId string, s_acctId string, s_sym string, s_limit string, s_amount string) (sharesRemaining float64, err error) {
+		s_trId string, s_acctId string, s_sym string, s_limit string, s_amount string) (sharesToExecute float64, err error) {
 
 		if (b_sym != s_sym) {
 			err = fmt.Errorf("Symbol mismatch.")
@@ -112,12 +112,7 @@ type Symbol struct {
 		}
 		s_amt_f, _ := strconv.ParseFloat(s_amount, 64)
 		b_amt_f, _ := strconv.ParseFloat(b_amount, 64)
-		sharesToExecute := math.Min(- 1 * s_amt_f, b_amt_f)
-		if matchAtBuyPrice {
-			sharesRemaining = s_amt_f + sharesToExecute
-		} else {
-			sharesRemaining = b_amt_f - sharesToExecute
-		}
+		sharesToExecute = math.Min(- 1 * s_amt_f, b_amt_f)
 
 		log.WithFields(log.Fields{
 			"sym": sym,
@@ -240,12 +235,14 @@ type Symbol struct {
 		conn = redis.Pool.Get()
 		defer conn.Close()
 
+		var amountUnexecuted = order_amt
+
+		// loop until there are no more orders to execute
+		for {
 		members, err = redis.Zrange("open-sell:" + sym, 0, 0, true)
 		if err != nil {
 			return
 		}
-
-		var amountUnexecuted = order_amt
 		if len(members) > 0 {
 			// get information on this matched order...
 			data, _ := redigo.Strings(conn.Do("HMGET", "order:" + members[0], "account", "symbol", "limit", "amount"))
@@ -262,12 +259,21 @@ type Symbol struct {
 
 			matched_limit_f, _ := strconv.ParseFloat(data[2], 64)
 			if (matched_limit_f < limit_f) {
-				amountUnexecuted, err = executeOrder(false, transId_str, acctId, sym, order.Limit, order.Amount, members[0], data[0], data[1], data[2], data[3])
+				var amountExecuted float64
+				amountExecuted, err = executeOrder(false, transId_str, acctId, sym, order.Limit, order.Amount, members[0], data[0], data[1], data[2], data[3])
+				amountUnexecuted -= amountExecuted
+				if amountUnexecuted == 0 {
+					break
+				}
 
+			} else {
+				break
 			}
 
-
+		} else {
+			break
 		}
+	}
 
 		_, err = conn.Do("HSET", "order:" + transId_str, "amount", amountUnexecuted)
 		if err != nil {
@@ -330,13 +336,16 @@ type Symbol struct {
 		// remove shares from user's account
 		redis.HIncrByFloat("acct:" + acctId + ":positions", sym, order_amt)
 
+		var sharesRemaining = order_amt // shares left to sell (<= 0)
+
+		for {
+
 		// find highest open buy order
 		members, err = redis.Zrange("open-buy:" + sym, -1, -1, true)
 		if err != nil {
 			return
 		}
 
-		var sharesRemaining = order_amt // shares left to sell (<= 0)
 		if len(members) > 0 {
 				// get information on this matched order...
   			data, _ := redigo.Strings(conn.Do("HMGET", "order:" + members[0], "account", "symbol", "limit", "amount"))
@@ -354,9 +363,19 @@ type Symbol struct {
 					// price is executable
 					if (matched_limit_f > limit_f) {
 						// <=0
-						sharesRemaining, err = executeOrder(true, members[0], data[0], data[1], data[2], data[3], transId_str, acctId, sym, order.Limit, order.Amount)
+						var amountExecuted float64
+						amountExecuted, err = executeOrder(true, members[0], data[0], data[1], data[2], data[3], transId_str, acctId, sym, order.Limit, order.Amount)
+						sharesRemaining += amountExecuted
+						if sharesRemaining == 0 {
+							break
+						}
+					} else {
+						break
 					}
+		} else {
+			break
 		}
+	}
 
 		// update shares remaining to sell
 		_, err = conn.Do("HSET", "order:" + transId_str, "amount", sharesRemaining)
