@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"fmt"
 	"sync"
+	"math"
 	redigo "github.com/gomodule/redigo/redis"
 )
 
@@ -89,46 +90,130 @@ type Symbol struct {
 		Reason string `xml:",innerxml"`
 	}
 
+	// must call with lock held to perform atomically
 	func executeOrder(
+		matchAtBuyPrice bool,
 		// buy order info
-		b_acctId string, b_sym string, b_limit string, b_amount string,
+		b_trId string, b_acctId string, b_sym string, b_limit string, b_amount string,
 		// sell order info
-		s_acctId string, s_sym string, s_limit string, s_amount string) {
+		s_trId string, s_acctId string, s_sym string, s_limit string, s_amount string) (sharesRemaining float64, err error) {
+
+		if (b_sym != s_sym) {
+			err = fmt.Errorf("Symbol mismatch.")
+			return
+		}
+
+		sym := b_sym
+		var limit_usd float64
+		if matchAtBuyPrice {
+			limit_usd, _ = strconv.ParseFloat(b_limit, 64)
+		} else {
+			limit_usd, _ = strconv.ParseFloat(s_limit, 64)
+		}
+		s_amt_f, _ := strconv.ParseFloat(s_amount, 64)
+		b_amt_f, _ := strconv.ParseFloat(b_amount, 64)
+		sharesToExecute := math.Min(- 1 * s_amt_f, b_amt_f)
+		if matchAtBuyPrice {
+			sharesRemaining = s_amt_f + sharesToExecute
+		} else {
+			sharesRemaining = b_amt_f - sharesToExecute
+		}
 
 		log.WithFields(log.Fields{
+			"sym": sym,
+			"matched_limit": limit_usd,
 			"b_account_id": b_acctId,
-			"b_sym": b_sym,
 			"b_limit": b_limit,
 			"b_amount": b_amount,
 			"s_account_id": s_acctId,
-			"s_sym": s_sym,
 			"s_limit": s_limit,
 			"s_amount": s_amount,
 			}).Info("Matched open orders")
 
-			/*
-			ex, _ := redis.HExists("acct:" + b_acctId + ":positions", b_sym)
+		// add shares to buyer's account (don't worry about seller, they had shares removed when order opened)
+		addShares(b_acctId, sym, sharesToExecute)
+		// add money to seller's account
+		err = addAccountBalance(s_acctId, sharesToExecute * limit_usd)
+		if err != nil {
+			return
+		}
+
+		// remove money from buyer because money wasn't removed yet at order open
+		if (!matchAtBuyPrice) {
+			err = addAccountBalance(b_acctId, -1 * sharesToExecute * limit_usd)
+			if err != nil {
+				return
+			}
+		}
 
 
-			if ex {
-				amt_float, _ := strconv.ParseFloat(b_amount, 64)
-				redis.HIncrByFloat("acct:" + rcv_acct.Id + ":positions", sym.Sym, amt_float)
-				} else {
-				redis.SetField("acct:" + rcv_acct.Id + ":positions", sym.Sym, rcv_acct.Amount)
-				} */
+		if s_amt_f + sharesToExecute == 0 {
+			closeOpenOrder(false, sym, s_trId)
+		}
 
+		if b_amt_f - sharesToExecute == 0 {
+			closeOpenOrder(true, sym, b_trId)
+		}
+
+		return
+
+	}
+
+	func closeOpenOrder(buy bool, sym string, transId string) (err error) {
+		conn := redis.Pool.Get()
+		defer conn.Close()
+		if buy {
+			_, err = conn.Do("ZREM", "open-buy:" + sym, transId)
+		} else {
+			_, err = conn.Do("ZREM", "open-sell:" + sym, transId)
+		}
+
+		return
+
+	}
+
+	func getAccountBalance(acctId string) (bal_f float64, err error) {
+		bal , _ := redis.GetField("acct:" + acctId, "balance")
+		if bal == nil {
+			// If a user balance is nil, it does not exist
+				err = fmt.Errorf("User %s does not exist", acctId)
+				return
+		}
+		bal_f, _ = strconv.ParseFloat(string(bal.([]byte)), 64)
+
+		return
+	}
+
+	func addAccountBalance(acctId string, amount float64) (err error) {
+		ex , _ := redis.HExists("acct:" + acctId, "balance")
+		if ex == false {
+			// If a user balance is nil, it does not exist
+				err = fmt.Errorf("User %s does not exist", acctId)
+				return
+		}
+
+		redis.HIncrByFloat("acct:" + acctId, "balance", amount)
+		return
+	}
+
+	func addShares(acctId string, sym string, amount float64) {
+		ex, _ := redis.HExists("acct:" + acctId + ":positions", sym)
+
+		if ex {
+
+			redis.HIncrByFloat("acct:" + acctId + ":positions", sym, amount)
+			} else {
+			redis.SetField("acct:" + acctId + ":positions", sym, amount)
+			}
 	}
 
 	func(order *Order) handleBuy(acctId string, transId_str string, sym string, order_amt float64, limit_f float64) (err error) {
 		// check if user has enough USD in their account
-
-		bal , _ := redis.GetField("acct:" + acctId, "balance")
-		if bal == nil {
-			// If a user has no balance, it either does not exist, or has no money
-				err = fmt.Errorf("User %s has balance 0", acctId)
-				return
+		var bal_float float64
+		bal_float, err = getAccountBalance(acctId)
+		if err != nil {
+			return
 		}
-		bal_float, _ := strconv.ParseFloat(string(bal.([]byte)), 64)
 
 		if order_amt * limit_f > bal_float {
 			log.WithFields(log.Fields{
@@ -142,8 +227,8 @@ type Symbol struct {
 		// add info to redis
 		// TODO - Add to redis_utils API
 
-		conn := redis.Pool.Get()
-		_, err = conn.Do("HMSET", "order:" + transId_str, "account", acctId, "symbol", sym, "limit", order.Limit, "amount", order.Amount)
+		var conn = redis.Pool.Get()
+		_, err = conn.Do("HMSET", "order:" + transId_str, "account", acctId, "symbol", sym, "limit", order.Limit, "amount", order.Amount, "origAmount", order.Amount)
 	  conn.Close()
 
 		if err != nil {
@@ -154,6 +239,8 @@ type Symbol struct {
 
 		match_mux.Lock()
 		defer match_mux.Unlock() // in case exception is thrown, unlock when stack closes
+		conn = redis.Pool.Get()
+		defer conn.Close()
 
 		members, err = redis.Zrange("open-sell:" + sym, 0, 0, true)
 		if err != nil {
@@ -161,12 +248,10 @@ type Symbol struct {
 			return
 		}
 
-		var orderUnmatched = true
+		var amountUnexecuted = order_amt
 		if len(members) > 0 {
 			// get information on this matched order...
-			conn := redis.Pool.Get()
 			data, _ := redigo.Strings(conn.Do("HMGET", "order:" + members[0], "account", "symbol", "limit", "amount"))
-			conn.Close()
 
 			if len(data) != 4 {
 				log.WithFields(log.Fields{
@@ -180,19 +265,26 @@ type Symbol struct {
 
 			matched_limit_f, _ := strconv.ParseFloat(data[2], 64)
 			if (matched_limit_f < limit_f) {
-				orderUnmatched = false
-				executeOrder(acctId, sym, order.Limit, order.Amount, data[0], data[1], data[2], data[3])
+				amountUnexecuted, err = executeOrder(false, transId_str, acctId, sym, order.Limit, order.Amount, members[0], data[0], data[1], data[2], data[3])
+
 			}
 
 
 		}
 
-		if orderUnmatched {
+		_, err = conn.Do("HSET", "order:" + transId_str, "amount", amountUnexecuted)
+		if err != nil {
+			return
+		}
+
+		if amountUnexecuted > 0 {
 			// No matches, add to open buy sorted set
 			err = redis.Zadd("open-buy:" + sym, order.Limit, transId_str)
 			if err != nil {
 				return
 			}
+
+			addAccountBalance(acctId, -1 * amountUnexecuted * limit_f)
 		}
 
 		return
@@ -221,30 +313,35 @@ type Symbol struct {
 			return
 		}
 
-		conn := redis.Pool.Get()
-		_, err = conn.Do("HMSET", "order:" + transId_str, "account", acctId, "symbol", sym, "limit", order.Limit, "amount", order.Amount)
+		var conn = redis.Pool.Get()
+		// set order details
+		_, err = conn.Do("HMSET", "order:" + transId_str, "account", acctId, "symbol", sym, "limit", order.Limit, "amount", order.Amount, "origAmount", order.Amount)
 	  conn.Close()
 
 		if err != nil {
 			return
 		}
 
-		// get open sell with lowest sell value
-		var members []string
 
+		var members []string
 		match_mux.Lock()
 		defer match_mux.Unlock() // in case exception is thrown, unlock when stack closes
+		conn = redis.Pool.Get()
+		defer conn.Close()
+
+		// remove shares from user's account
+		redis.HIncrByFloat("acct:" + acctId + ":positions", sym, order_amt)
+
+		// find highest open buy order
 		members, err = redis.Zrange("open-buy:" + sym, -1, -1, true)
 		if err != nil {
 			return
 		}
 
-		var orderUnmatched = true
+		var sharesRemaining = order_amt // shares left to sell (<= 0)
 		if len(members) > 0 {
 				// get information on this matched order...
-				conn := redis.Pool.Get()
   			data, _ := redigo.Strings(conn.Do("HMGET", "order:" + members[0], "account", "symbol", "limit", "amount"))
-				conn.Close()
 
 				if len(data) != 4 {
 					log.WithFields(log.Fields{
@@ -256,19 +353,27 @@ type Symbol struct {
 					}
 
 					matched_limit_f, _ := strconv.ParseFloat(data[2], 64)
+					// price is executable
 					if (matched_limit_f > limit_f) {
-						orderUnmatched = false
-						executeOrder(data[0], data[1], data[2], data[3], acctId, sym, order.Limit, order.Amount)
+						// <=0
+						sharesRemaining, err = executeOrder(true, members[0], data[0], data[1], data[2], data[3], transId_str, acctId, sym, order.Limit, order.Amount)
 					}
-				//err = redis.GetField("order:" + transId_str, "account", acctId)
 		}
 
-		if orderUnmatched {
+		// update shares remaining to sell
+		_, err = conn.Do("HSET", "order:" + transId_str, "amount", sharesRemaining)
+		if err != nil {
+			return
+		}
+
+		// more shares to sell, still
+		if sharesRemaining < 0 {
 			// No matches, add to open sell sorted set
 		err = redis.Zadd("open-sell:" + sym, order.Limit, transId_str)
 		if err != nil {
 			return
 		}
+
 	}
 
 		return
