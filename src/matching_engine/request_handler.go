@@ -275,6 +275,10 @@ type Symbol struct {
 		}
 	}
 
+	log.WithFields(log.Fields{
+		"Amount Unexecuted": amountUnexecuted,
+		}).Info("Status")
+
 		_, err = conn.Do("HSET", "order:" + transId_str, "amount", amountUnexecuted)
 		if err != nil {
 			return
@@ -287,6 +291,7 @@ type Symbol struct {
 				return
 			}
 
+			// remove funds from account, because not all was matched immediately
 			addAccountBalance(acctId, -1 * amountUnexecuted * limit_f)
 		}
 
@@ -376,6 +381,10 @@ type Symbol struct {
 			break
 		}
 	}
+
+	log.WithFields(log.Fields{
+		"Amount Unexecuted": sharesRemaining,
+		}).Info("Status")
 
 		// update shares remaining to sell
 		_, err = conn.Do("HSET", "order:" + transId_str, "amount", sharesRemaining)
