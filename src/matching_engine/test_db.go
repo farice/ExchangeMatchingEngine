@@ -13,7 +13,7 @@ func main() {
 	dbInfoString := "user=andrewbihl dbname=exchange sslmode=disable"
 	db, err := sql.Open("postgres", dbInfoString)
 	if err != nil {
-		log.Fatal("DATABASE ERROR: $1", err)
+		log.Fatal("DATABASE ERROR: ", err)
 	}
 
 	// db.QueryRow(`INSERT INTO position(uid, account_id, symbol, amount)
@@ -23,7 +23,19 @@ func main() {
 	// 	log.Error(err)
 	// }
 
-	model := Model{db, []string{}}
-	model.createOrUpdateSymbol("AMZN", 100000)
-	print("DONE")
+	sqlQuery := fmt.Sprintf(`SELECT shares FROM symbol WHERE symbol='%s'`, "ANDREW")
+	var shares int
+	fetch_err := db.QueryRow(sqlQuery).Scan(shares)
+	if fetch_err != nil {
+		print("ERROR: ")
+		log.Error(err)
+	}
+	println(shares)
+
+	model := Model{db, make(chan string, 100)}
+	model.createOrUpdateSymbol("NFLX", 666)
+	model.createOrUpdateSymbol("AAPL", 222)
+	model.createOrUpdateSymbol("XXX", 333)
+	model.executeQueries()
+	println("DONE")
 }

@@ -13,7 +13,7 @@ import (
 // Model provides access to the application's data layer.
 type Model struct {
 	db       *sql.DB
-	commands []string
+	commands chan string
 }
 
 /// Accounts
@@ -25,32 +25,46 @@ func (m *Model) createAccount(balance float64) (uid string, err error) {
 }
 
 func (m *Model) createAccountWithID(uid string, balance float64) (err error) {
-	sqlQuery := fmt.Sprintf("INSERT INTO account(uid, balance) VALUES(%s, %f)", uid, balance)
+	// TODO: Write to cache
+	sqlQuery := fmt.Sprintf("INSERT INTO account(uid, balance) VALUES('%s', %f)", uid, balance)
 	m.submitQuery(sqlQuery)
 	return nil
 }
 
 func (m *Model) getAccountBalance(accountID string) (balance float64, err error) {
+	// TODO: Attempt fetch from redis
 
-	return 0, nil
+	// If must check postgres
+	sqlQuery := fmt.Sprint(`SELECT balance FROM account WHERE uid='%s'`, accountID)
+	err = m.db.QueryRow(sqlQuery).Scan(&balance)
+	if err != nil {
+		// log.Error("Error in fetch account balance: ", err)
+		return -1, err
+	}
+	return balance, nil
 }
 
 /// Orders
 
-func (m *Model) submitBuyOrder(accountID string, amount float64, limit float64) (orderID string, err error) {
-
-	return "", nil
+func (m *Model) submitBuyOrder(accountID string, symbol string, amount float64, limit float64) (orderID string, err error) {
+	// TODO: Write to cache
+	uid := ksuid.New().String()
+	sqlQuery := fmt.Sprintf(`INSERT INTO buy_order(uid, account_id, symbol, amount, limit) VALUES('%s', '%s', '%s', %f, %f);`, uid, accountID, symbol, amount, limit)
+	m.submitQuery(sqlQuery)
+	return uid, err
 }
 
-func (m *Model) submitSellOrder(accountID string, amount float64, limit float64) (orderID string, err error) {
-
-	return "", nil
+func (m *Model) submitSellOrder(accountID string, symbol string, amount float64, limit float64) (orderID string, err error) {
+	// TODO: Write to cache
+	uid := ksuid.New().String()
+	sqlQuery := fmt.Sprintf(`INSERT INTO buy_order(uid, account_id, symbol, amount, limit) VALUES('%s', '%s', '%s', %f, %f);`, uid, accountID, symbol, amount, limit)
+	m.submitQuery(sqlQuery)
+	return uid, err
 }
 
 /// Symbols
 
 func (m *Model) createOrUpdateSymbol(symbol string, shares float64) (err error) {
-	// ex, _ := redis.Exists("sym:" + sym.Sym)
 	exists, totalShares, err := m.getSymbolSharesTotal(symbol)
 	if !exists {
 		// TODO: Set amount in redis
@@ -63,30 +77,52 @@ func (m *Model) createOrUpdateSymbol(symbol string, shares float64) (err error) 
 		m.submitQuery(sqlQuery)
 	} else {
 		// Update amount
-		sqlQuery := fmt.Sprintf("UPDATE symbol SET shares=%f WHERE name=%s", shares, symbol)
+		sqlQuery := fmt.Sprintf("UPDATE symbol SET shares=%f WHERE name='%s'", shares, symbol)
 		m.submitQuery(sqlQuery)
 	}
 	return nil
 }
 
-func (m *Model) getSymbolSharesTotal(symbol string) (symbolExists bool, share float64, err error) {
-	return false, 0, nil
+func (m *Model) getSymbolSharesTotal(symbol string) (symbolExists bool, shares float64, err error) {
+	// TODO: Check redis
+	// ex, _ := redis.Exists("sym:" + sym.Sym)
+
+	// If need to ask postgres
+	sqlQuery := fmt.Sprintf(`SELECT shares FROM symbol WHERE name='%s';`, symbol)
+	err = m.db.QueryRow(sqlQuery).Scan(&shares)
+	if err != nil {
+		return false, 0, err
+	}
+	return true, shares, nil
 }
 
 /// Positions
 
 func (m *Model) createPosition(accountID string, symbol string, amount float64) {
-
+	// TODO: Write to cache
+	uid := ksuid.New().String()
+	sqlQuery := fmt.Sprintf(`INSERT INTO position(uid, account_id, symbol, amount) VALUES('$s', '%s', '%s', %f)`, uid, accountID, symbol, amount)
+	m.submitQuery(sqlQuery)
 }
 
-func (m *Model) removePosition(accountID string, symbol string, amount float64) {
-
+func (m *Model) removePosition(uid string) {
+	// TODO: Update cache
+	sqlQuery := fmt.Sprintf(`DELETE FROM position WHERE uid='%s'`, uid)
+	m.submitQuery(sqlQuery)
 }
+
+/// Implementation / private
 
 func (m *Model) submitQuery(query string) {
-	print(query)
-	_, err := m.db.Exec(query)
-	if err != nil {
-		log.Error("SQL database error: ", err)
+	m.commands <- query
+}
+
+func (m *Model) executeQueries() {
+	log.Info(fmt.Sprintf("Flushing SQL commands. There are %d commands in the buffer.", len(m.commands)))
+	for len(m.commands) > 0 {
+		_, err := m.db.Exec(<-m.commands)
+		if err != nil {
+			log.Error("SQL database error: ", err)
+		}
 	}
 }
