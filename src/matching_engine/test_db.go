@@ -16,11 +16,14 @@ func main() {
 		log.Fatal("DATABASE ERROR: $1", err)
 	}
 
-	db.QueryRow(`INSERT INTO position(uid, account_id, symbol, amount)
-	VALUES(1, 1, 'AMZN', 242.77)`)
+	// db.QueryRow(`INSERT INTO position(uid, account_id, symbol, amount)
+	// VALUES(1, 1, 'AMZN', 242.77)`)
 
-	if err != nil {
-		log.Error(err)
-	}
+	// if err != nil {
+	// 	log.Error(err)
+	// }
 
+	model := Model{db, []string{}}
+	model.createOrUpdateSymbol("AMZN", 100000)
+	print("DONE")
 }
