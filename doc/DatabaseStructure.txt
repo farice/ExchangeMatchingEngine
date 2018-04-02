@@ -1,0 +1,41 @@
+postgres database structure: 
+
+e.g. 
+Table {
+    column_name: type
+}
+
+=============================
+
+account {
+    uid: varchar
+    balance: float
+}
+
+position {
+    uid: varchar
+    account_id: varchar
+    symbol: varchar
+    amount: float
+}
+
+buy_order {
+    uid: varchar
+    account_id: varchar
+    symbol: varchar
+    limit: float
+    amount: floar
+}
+
+sell_order {
+    uid: varchar
+    account_id: varchar
+    symbol: varchar
+    limit: float
+    amount: float
+}
+
+symbol {
+    name: varchar
+    shares: float
+}
