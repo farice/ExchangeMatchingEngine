@@ -1,0 +1,54 @@
+First is to create an account id which is 12345 with balance of 1000. Then I will add SPY to the account 12345 with amount of 100000. It will get a result with a created tag, which says that everything is created properly.
+
+Then I do the the same thing again. In the result, I will first get a error tag something like <error id=“12345”>Account already exists</error> and a created tag which says that account 12345 has amount of 200000. 
+
+For these two, they test that I can only have one unique account id, and when I use create the symbol that is existed, I will add it to the account. 
+
+Then I will create some accounts. This tests that the program can either handle create with zero child or more children.
+
+Here are the status:
+I should have five accounts. 100000 - 100004
+100000: balance 1000
+SPY: 200
+
+100001: balance 1000
+SPY 100
+A 200
+
+100002: balance 2000
+A 300
+
+100003: balance 30
+B 100
+
+100004: balance 4000
+
+Then I will send the next request. This will try to create a symbol for an unexisted account. This will give me an error tag
+
+At this point, I should thoroughly test the create functionality. Then I will test the transaction.
+
+First is to perform an transaction on an unexisted account. It should give me an error tag in the results. Then I will try to perform an empty transaction, which will also give me an error tag in the results.
+
+Then I will tried to place an order with more amount than the account has. I will also try to place an order with insufficient fund. I will try to place an order on some unexisted symbol. These will give me errors. (11)
+
+Then I will place an correct order on 100000. I can query transaction 1 and it returns correct output. Then I will also place an order on 100004 to buy 30 of it. Then I can query transaction 2 and get 20 open and 30 executed with price of 10.  (12_1, 12_2)
+
+Then I can place an order on account 100004. One of the order will reject and the other will pass. If I query transaction 3, I will get one error and one is 20 executed with price of 10. (12_3)
+
+I can not only test I can buy it partially, but also to show that I can use several waiting order to match a new incoming order.
+
+I will see that 10 share is open for buy, 10 share are executed at price of 15 and 50 shares are executed at price of 10. The other 20 share of 100000 at price of 30 is waiting for sell. (13_1, 13_2, 13_3)
+
+Then I will cancel the transaction created by 13_1. This will make the 20 shares of SPY at price of 30 unavailable and the executed one will not be affected.
+
+Then I will cancel the transaction created by 13_3.
+
+Then I will cancel the transaction created by 13_1. This will make all of them unavailable.
+
+Then I will cancel the transaction created by 13_1 again to make sure that even if I cancel the same transaction several times, the result will remain the same.
+
+
+
+
+
+

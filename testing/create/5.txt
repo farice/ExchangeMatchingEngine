@@ -1,0 +1,8 @@
+134
+<?xml version="1.0" encoding="UTF-8"?>
+<create>
+  <symbol sym="SPY">
+     <account id="100006">100000</account>
+  </symbol>
+</create>
+
