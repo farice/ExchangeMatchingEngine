@@ -2,10 +2,11 @@ package main
 
 import (
 	"bufio"
-	log "github.com/sirupsen/logrus"
 	"net"
 	"strconv"
 	"strings"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // Connections holds info about client and net connection
@@ -17,7 +18,7 @@ type Connection struct {
 // TCP server
 type server struct {
 	address                  string // Address to open connection
-	onNewConnectionCallback      func(c *Connection)
+	onNewConnectionCallback  func(c *Connection)
 	onClientConnectionClosed func(c *Connection, err error)
 	onNewMessage             func(c *Connection, message []byte)
 }

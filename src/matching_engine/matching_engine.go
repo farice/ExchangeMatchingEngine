@@ -1,10 +1,11 @@
 package main
 
 import (
-	log "github.com/sirupsen/logrus"
-	"os"
 	"fmt"
+	"os"
+
 	"github.com/farice/EME/redis"
+	log "github.com/sirupsen/logrus"
 )
 
 type StdOutHook struct{}
@@ -37,57 +38,55 @@ func init() {
 	file, err := os.OpenFile("/var/log/erss/exchange.log", os.O_CREATE|os.O_WRONLY, 0666)
 	if err == nil {
 		log.SetOutput(file)
-		} else {
-			log.Info("Failed to log to file, using default stdout")
-		}
-
-		log.AddHook(&StdOutHook{})
-
-		// Only log the warning severity or above.
-		//log.SetLevel(log.WarnLevel)
-
-		// MARK: - Global Transaction ID Counter
-
-		ex, err := redis.Exists("TransactionCounter")
-		if !ex {
-			redis.Set("TransactionCounter", 0)
-		}
-		
+	} else {
+		log.Info("Failed to log to file, using default stdout")
 	}
 
-		func main() {
-			var clientCount = 0
+	log.AddHook(&StdOutHook{})
 
-			// addr: exchange, port: 12345
-			server := NewTCPServer("exchange:12345")
+	// Only log the warning severity or above.
+	//log.SetLevel(log.WarnLevel)
 
-			// MARK: - Implement new client, message, and closed connection callbacks
+	// MARK: - Global Transaction ID Counter
 
-			server.OnNewConnection(func(c *Connection) {
-				// New Client Connected
-				log.WithFields(log.Fields{
-					"client count":  clientCount,
-					}).Info("New client connection")
-					clientCount += 1
+	ex, err := redis.Exists("TransactionCounter")
+	if !ex {
+		redis.Set("TransactionCounter", 0)
+	}
 
-					c.Send("Hello\n")
+}
 
-				})
+func main() {
+	var clientCount = 0
 
+	// addr: exchange, port: 12345
+	server := NewTCPServer("exchange:12345")
 
-				server.OnNewMessage(func(c *Connection, message []byte) {
-					c.handleRequest(message)
+	// MARK: - Implement new client, message, and closed connection callbacks
 
-				})
+	server.OnNewConnection(func(c *Connection) {
+		// New Client Connected
+		log.WithFields(log.Fields{
+			"client count": clientCount,
+		}).Info("New client connection")
+		clientCount += 1
 
+		c.Send("Hello\n")
 
-				server.OnClientConnectionClosed(func(c *Connection, err error) {
-					// Lost connection with Client
-					log.WithFields(log.Fields{
-						"error": err,
-						}).Info("Connection closed")
+	})
 
-					})
+	server.OnNewMessage(func(c *Connection, message []byte) {
+		c.handleRequest(message)
 
-					server.Listen()
-				}
+	})
+
+	server.OnClientConnectionClosed(func(c *Connection, err error) {
+		// Lost connection with Client
+		log.WithFields(log.Fields{
+			"error": err,
+		}).Info("Connection closed")
+
+	})
+
+	server.Listen()
+}
