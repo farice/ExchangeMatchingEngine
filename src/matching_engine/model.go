@@ -81,6 +81,18 @@ func (m *Model) cancelSellOrder(uid string, accountID string) {
 	return err
 }
 
+func (m *Model) getMinimumSellOrder(symbol string, maximum float64) (uid string, err error) {
+	// TODO: Find in cache
+
+	// If must go to db
+	sqlQuery = fmt.Sprintf(`SELECT TOP 1 uid FROM sell_order WHERE limit=(SELECT MIN(limit) FROM sell_order WHERE symbol=%s)  AND limit <= %f`, symbol, limit)
+	err = m.db.Query(sqlQuery).Scan(&uid)
+	if err != nil {
+		return nil, err
+	}
+	return uid, nil
+}
+
 /// Symbols
 
 func (m *Model) createOrUpdateSymbol(symbol string, shares float64) (err error) {
@@ -89,7 +101,6 @@ func (m *Model) createOrUpdateSymbol(symbol string, shares float64) (err error) 
 		// TODO: Set amount in redis
 		// redis.Set("sym:"+sym.Sym, "")
 		if err != nil {
-
 			return err
 		}
 		sqlQuery := fmt.Sprintf(`INSERT INTO symbol(name, shares) VALUES('%s', %f);`, symbol, totalShares+shares)
