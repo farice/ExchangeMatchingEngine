@@ -19,6 +19,7 @@ type Model struct {
 /// Accounts
 
 func (m *Model) createAccount(balance float64) (uid string, err error) {
+	// TODO: Write to cache
 	uid = ksuid.New().String()
 	err = m.createAccountWithID(uid, balance)
 	return uid, err
@@ -54,12 +55,30 @@ func (m *Model) submitBuyOrder(accountID string, symbol string, amount float64, 
 	return uid, err
 }
 
+func (m *Model) cancelBuyOrder(uid string, accountID string) (err error) {
+	// TODO: Get from cache
+
+	// If have to go to db
+	sqlQuery = fmt.Sprintf(`DELETE * from buy_order WHERE uid='%s'`, uid)
+	err = m.db.QueryRow(sqlQuery).Scan()
+	return err
+}
+
 func (m *Model) submitSellOrder(accountID string, symbol string, amount float64, limit float64) (orderID string, err error) {
 	// TODO: Write to cache
 	uid := ksuid.New().String()
 	sqlQuery := fmt.Sprintf(`INSERT INTO buy_order(uid, account_id, symbol, amount, limit) VALUES('%s', '%s', '%s', %f, %f);`, uid, accountID, symbol, amount, limit)
 	m.submitQuery(sqlQuery)
 	return uid, err
+}
+
+func (m *Model) cancelSellOrder(uid string, accountID string) {
+	// TODO: Find in cache
+
+	// If must go to db
+	sqlQuery = fmt.Sprintf(`DELETE * from sell_order WHERE uid='%s'`, uid)
+	err = m.db.QueryRow(sqlQuery).Scan()
+	return err
 }
 
 /// Symbols
