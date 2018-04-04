@@ -3,14 +3,45 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"redis"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
-	// "github.com/farice/EME/redis"
+	"github.com/farice/EME/redis"
 	_ "github.com/lib/pq"
 	"github.com/segmentio/ksuid"
 	log "github.com/sirupsen/logrus"
 )
+
+// Singleton approach found here: http://marcio.io/2015/07/singleton-pattern-in-go/#comment-2132217074
+var initialized uint32
+var instance *Model
+
+func SharedModel() *Model {
+
+	if atomic.LoadUInt32(&initialized) == 1 {
+		return instance
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if initialized == 0 {
+		dbInfoString := "user=andrewbihl dbname=exchange sslmode=disable"
+		db, err := sql.Open("postgres", dbInfoString)
+		if err != nil {
+			log.Fatal("DATABASE ERROR: ", err)
+			return nil
+		}
+		instance = &Model{db, make(chan string, 100)}
+		atomic.StoreUint32(&initialized, 1)
+	}
+	return instance
+}
+
+// var shared Model = {db, make(chan string, 100)}
 
 // Model provides access to the application's data layer.
 type Model struct {
@@ -35,7 +66,12 @@ func (m *Model) createAccountWithID(uid string, balance float64) (err error) {
 }
 
 func (m *Model) getAccountBalance(accountID string) (balance float64, err error) {
-	// TODO: Attempt fetch from redis
+	// Attempt fetch from redis
+	bal, _ := redis.GetField("acct:"+acctId, "balance")
+	if bal != nil {
+		balance = strconv.ParseFloat(string(bal.([]byte)), 64)
+		return balance, nil
+	}
 
 	// If must check postgres
 	sqlQuery := fmt.Sprint(`SELECT balance FROM account WHERE uid='%s'`, accountID)

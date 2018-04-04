@@ -177,17 +177,17 @@ func closeOpenOrder(buy bool, sym string, transId string) (err error) {
 
 }
 
-func getAccountBalance(acctId string) (bal_f float64, err error) {
-	bal, _ := redis.GetField("acct:"+acctId, "balance")
-	if bal == nil {
-		// If a user balance is nil, it does not exist
-		err = fmt.Errorf("User %s does not exist", acctId)
-		return
-	}
-	bal_f, _ = strconv.ParseFloat(string(bal.([]byte)), 64)
+// func getAccountBalance(acctId string) (bal_f float64, err error) {
+// 	bal, _ := redis.GetField("acct:"+acctId, "balance")
+// 	if bal == nil {
+// 		// If a user balance is nil, it does not exist
+// 		err = fmt.Errorf("User %s does not exist", acctId)
+// 		return
+// 	}
+// 	bal_f, _ = strconv.ParseFloat(string(bal.([]byte)), 64)
 
-	return
-}
+// 	return
+// }
 
 func addAccountBalance(acctId string, amount float64) (err error) {
 	ex, _ := redis.HExists("acct:"+acctId, "balance")
@@ -215,7 +215,8 @@ func addShares(acctId string, sym string, amount float64) {
 func (order *Order) handleBuy(acctId string, transId_str string, sym string, order_amt float64, limit_f float64) (err error) {
 	// check if user has enough USD in their account
 	var bal_float float64
-	bal_float, err = getAccountBalance(acctId)
+	// bal_float, err = getAccountBalance(acctId)
+	bal_float, err = SharedModel().getAccountBalance(acctId)
 	if err != nil {
 		return
 	}
