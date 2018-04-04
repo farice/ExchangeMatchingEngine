@@ -1,6 +1,8 @@
 version: '3.3'
 
 services:
+  db:
+    image: postgres
   redis:
     image: redis
   exchange:
@@ -12,3 +14,6 @@ services:
     ports:
       - "12345:12345"
     tty: true
+    depends_on:
+      - db
+      - redis

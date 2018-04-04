@@ -7,6 +7,6 @@ ADD ./config /config/
 
 ADD ./src /go/src/github.com/farice/EME/
 
-RUN go get github.com/sirupsen/logrus && go get github.com/gomodule/redigo/redis && go get github.com/lib/pq
+RUN go get github.com/sirupsen/logrus && go get github.com/gomodule/redigo/redis && go get github.com/lib/pq && go get github.com/segmentio/ksuid
 
 RUN chmod +x /config/entrypoint.sh

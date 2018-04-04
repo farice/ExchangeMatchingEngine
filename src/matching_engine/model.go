@@ -6,8 +6,7 @@ import (
 	"redis"
 	"strconv"
 	"strings"
-	"sync/atomic"
-	"time"
+	//"time"
 
 	"github.com/farice/EME/redis"
 	_ "github.com/lib/pq"
@@ -119,7 +118,7 @@ func (m *Model) cancelBuyOrder(uid string, accountID string) (err error) {
 	// TODO: Get from cache
 
 	// If have to go to db
-	sqlQuery = fmt.Sprintf(`DELETE * from buy_order WHERE uid='%s'`, uid)
+	sqlQuery := fmt.Sprintf(`DELETE * from buy_order WHERE uid='%s'`, uid)
 	err = m.db.QueryRow(sqlQuery).Scan()
 	return err
 }
@@ -132,23 +131,23 @@ func (m *Model) submitSellOrder(accountID string, symbol string, amount float64,
 	return uid, err
 }
 
-func (m *Model) cancelSellOrder(uid string, accountID string) {
+func (m *Model) cancelSellOrder(uid string, accountID string) (err error) {
 	// TODO: Find in cache
 
 	// If must go to db
-	sqlQuery = fmt.Sprintf(`DELETE * from sell_order WHERE uid='%s'`, uid)
+	sqlQuery := fmt.Sprintf(`DELETE * from sell_order WHERE uid='%s'`, uid)
 	err = m.db.QueryRow(sqlQuery).Scan()
-	return err
+	return
 }
 
-func (m *Model) getMinimumSellOrder(symbol string, maximum float64) (uid string, err error) {
+func (m *Model) getMinimumSellOrder(symbol string, limit float64, maximum float64) (uid string, err error) {
 	// TODO: Find in cache
 
 	// If must go to db
-	sqlQuery = fmt.Sprintf(`SELECT TOP 1 uid FROM sell_order WHERE limit=(SELECT MIN(limit) FROM sell_order WHERE symbol=%s)  AND limit <= %f`, symbol, limit)
-	err = m.db.Query(sqlQuery).Scan(&uid)
+	sqlQuery := fmt.Sprintf(`SELECT TOP 1 uid FROM sell_order WHERE limit=(SELECT MIN(limit) FROM sell_order WHERE symbol=%s)  AND limit <= %f`, symbol, limit)
+	err = m.db.QueryRow(sqlQuery).Scan(&uid)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	return uid, nil
 }

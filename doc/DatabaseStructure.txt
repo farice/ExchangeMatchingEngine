@@ -24,7 +24,7 @@ buy_order {
     account_id: varchar
     symbol: varchar
     limit: float
-    amount: floar
+    amount: float
 }
 
 sell_order {
