@@ -15,6 +15,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const user = "andrewbihl"
+const dbname = "exchange"
+const sslmode = "disable"
+const dbInfoString = fmt.Sprintf("user=%s dbname=%s sslmode=%s", user, dbname, sslmode)
+
 // Singleton approach found here: http://marcio.io/2015/07/singleton-pattern-in-go/#comment-2132217074
 var initialized uint32
 var instance *Model
@@ -29,7 +34,6 @@ func SharedModel() *Model {
 	defer mu.Unlock()
 
 	if initialized == 0 {
-		dbInfoString := "user=andrewbihl dbname=exchange sslmode=disable"
 		db, err := sql.Open("postgres", dbInfoString)
 		if err != nil {
 			log.Fatal("DATABASE ERROR: ", err)
@@ -208,9 +212,8 @@ func (m *Model) executeQueries() {
 	for len(m.commands) > 0 {
 		s := <-m.commands
 		if strings.HasPrefix(s, "DELETE") {
-			dbInfo = "user=andrewbihl dbname=exchange sslmode=disable"
 			// TODO: Set up listener for record update to cache
-			listener := pq.NewListener(dbInfo, 10*time.Second, time.Minute, reportProblem)
+			listener := pq.NewListener(dbInfoString, 10*time.Second, time.Minute, reportProblem)
 		}
 		_, err := m.db.Exec(s)
 		if err != nil {
