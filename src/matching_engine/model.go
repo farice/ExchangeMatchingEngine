@@ -3,6 +3,8 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"strings"
+	"time"
 
 	// "github.com/farice/EME/redis"
 	_ "github.com/lib/pq"
@@ -150,7 +152,13 @@ func (m *Model) submitQuery(query string) {
 func (m *Model) executeQueries() {
 	log.Info(fmt.Sprintf("Flushing SQL commands. There are %d commands in the buffer.", len(m.commands)))
 	for len(m.commands) > 0 {
-		_, err := m.db.Exec(<-m.commands)
+		s := <-m.commands
+		if strings.HasPrefix(s, "DELETE") {
+
+			// TODO: Set up listener for record update to cache
+			listener := pq.NewListener(uri, 10*time.Second, time.Minute, reportProblem)
+		}
+		_, err := m.db.Exec(s)
 		if err != nil {
 			log.Error("SQL database error: ", err)
 		}
