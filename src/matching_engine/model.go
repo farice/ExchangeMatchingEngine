@@ -83,6 +83,24 @@ func (m *Model) getAccountBalance(accountID string) (balance float64, err error)
 	return balance, nil
 }
 
+func (m *Model) addAccountBalance(accountID string, balance float64) (err error) {
+	ex, _ := redis.HExists("acct:"+accountID, "balance")
+	if ex == false {
+		// Should return err if cannot find row.
+		err = db.QueryRow(`UPDATE symbol SET balance=%f WHERE uid='%s'`, balance, accountID)
+		// TODO: Add account to redis store
+
+		// If user does not exist
+		if err != nil {
+			err = fmt.Errorf("User %s does not exist", accountID)
+		}
+		return
+	}
+
+	redis.HIncrByFloat("acct:"+acctId, "balance", amount)
+
+}
+
 /// Orders
 
 func (m *Model) submitBuyOrder(accountID string, symbol string, amount float64, limit float64) (orderID string, err error) {
