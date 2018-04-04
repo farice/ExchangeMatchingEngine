@@ -208,9 +208,9 @@ func (m *Model) executeQueries() {
 	for len(m.commands) > 0 {
 		s := <-m.commands
 		if strings.HasPrefix(s, "DELETE") {
-
+			dbInfo = "user=andrewbihl dbname=exchange sslmode=disable"
 			// TODO: Set up listener for record update to cache
-			listener := pq.NewListener(uri, 10*time.Second, time.Minute, reportProblem)
+			listener := pq.NewListener(dbInfo, 10*time.Second, time.Minute, reportProblem)
 		}
 		_, err := m.db.Exec(s)
 		if err != nil {
