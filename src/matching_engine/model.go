@@ -11,7 +11,6 @@ import (
 
 	"github.com/farice/EME/redis"
 	_ "github.com/lib/pq"
-	"github.com/segmentio/ksuid"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -60,11 +59,10 @@ type Model struct {
 
 /// Accounts
 
-func (m *Model) createAccount(uid string, balance float64) (uid string, err error) {
+func (m *Model) createAccount(uid string, balance float64) (err error) {
 	// TODO: Write to cache
-	uid = ksuid.New().String()
 	err = m.createAccountWithID(uid, balance)
-	return uid, err
+	return err
 }
 
 func (m *Model) createAccountWithID(uid string, balance float64) (err error) {
@@ -131,7 +129,7 @@ func (m *Model) cancelBuyOrder(uid string, accountID string) (err error) {
 	return err
 }
 
-func (m *Model) submitSellOrder(accountID string, symbol string, amount float64, limit float64) (err error) {
+func (m *Model) submitSellOrder(uid string, accountID string, symbol string, amount float64, limit float64) (err error) {
 	// TODO: Write to cache
 	sqlQuery := fmt.Sprintf(`INSERT INTO buy_order(uid, account_id, symbol, amount, limit) VALUES('%s', '%s', '%s', %f, %f);`, uid, accountID, symbol, amount, limit)
 	m.submitQuery(sqlQuery)
