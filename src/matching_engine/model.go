@@ -162,6 +162,14 @@ func (m *Model) cancelSellOrder(uid string, accountID string) (err error) {
 }
 
 func (m *Model) getMaximumBuyOrder(symbol string, limit float64, maximum float64) (uid string, err error) {
+	// TODO: Get from redis
+
+	sqlQuery := fmt.Sprintf(`SELECT TOP 1 uid FROM buy_order WHERE limit=(SELECT MAX(limit) FROM buy_order WHERE symbol=%s)  AND limit >= %f`, symbol, limit)
+	err = m.db.QueryRow(sqlQuery).Scan(&uid)
+	if err != nil {
+		return "", err
+	}
+	return uid, nil
 
 }
 
