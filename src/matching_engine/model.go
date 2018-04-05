@@ -83,7 +83,7 @@ func (m *Model) getAccountBalance(accountID string) (balance float64, err error)
 	}
 
 	// If must check postgres
-	sqlQuery := fmt.Sprint(`SELECT balance FROM account WHERE uid='%s'`, accountID)
+	sqlQuery := fmt.Sprintf(`SELECT balance FROM account WHERE uid='%s'`, accountID)
 	err = m.db.QueryRow(sqlQuery).Scan(&balance)
 	if err != nil {
 		// log.Error("Error in fetch account balance: ", err)
