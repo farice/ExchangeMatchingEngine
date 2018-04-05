@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -14,6 +15,7 @@ func outputDatabaseStateTruncated(rowLimit int) {
 	outputPositions(rowLimit)
 	outputBuyOrders(rowLimit)
 	outputSellOrders(rowLimit)
+	outputTransactions(rowLimit)
 }
 
 func outputAccounts(rowLimit int) {
@@ -106,5 +108,24 @@ func outputSellOrders(rowLimit int) {
 	for rows.Next() {
 		err = rows.Scan(&uid, &accountID, &symbol, &priceLimit, &amount)
 		println(fmt.Sprintf("UID: %s -- AccountID: %f -- Symbol: %s -- PriceLimit: %f -- Amount: %f", uid, accountID, symbol, priceLimit, amount))
+	}
+}
+
+func outputTransactions(rowLimit int) {
+	tableName := "transaction"
+	var symbol string
+	var amount float64
+	var price float64
+	var transactionTime time.Time
+
+	rows, err := SharedModel().db.Query(fmt.Sprintf("SELECT * FROM %s LIMIT %d", tableName, rowLimit))
+	if err != nil {
+		log.Info("Error attempting to print transactions: ", err)
+		return
+	}
+	println("\n#######  TRANSACTIONS (max 50): ")
+	for rows.Next() {
+		err = rows.Scan(&symbol, &amount, &price, &transactionTime)
+		println(fmt.Sprintf("Symbol: %s -- Amount: %f -- Price: %s -- TransactionTime: %v", &symbol, &amount, &price, &transactionTime))
 	}
 }
