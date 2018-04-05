@@ -5,6 +5,8 @@
   - Figure out how messages of deletion should come back, if at all.
 - Write matching logic
 - Test speed of SQL query flushing. May need to explore options for dispatch.
+- Break times by arrival time
+- Use `removed` flag for deleted cache entries, for the sake of coherence
 
-**Bugs:** 
+**Bugs:**
 - createOrUpdateSymbol() only re-creates symbols; does not add balance to existing symbols.
