@@ -112,7 +112,7 @@ func (m *Model) addAccountBalance(accountID string, amount float64) (err error) 
 	return nil
 }
 
-/// Orders
+/// Open orders
 
 func (m *Model) submitBuyOrder(uid string, accountID string, symbol string, amount float64, limit float64) (err error) {
 	// TODO: Write to cache
@@ -121,8 +121,15 @@ func (m *Model) submitBuyOrder(uid string, accountID string, symbol string, amou
 	return err
 }
 
+func (m *Model) updateBuyOrderAmount(uid string, newAmount float64) (err error) {
+	// TODO: Write to redis
+
+	sqlQuery := fmt.Sprintf(`UPDATE sell_order SET amount=%f WHERE uid = '%s'`, newAmount, uid)
+	m.submitQuery(sqlQuery)
+}
+
 func (m *Model) cancelBuyOrder(uid string, accountID string) (err error) {
-	// TODO: Get from cache
+	// TODO: Get from redis
 
 	// If have to go to db
 	sqlQuery := fmt.Sprintf(`DELETE * from buy_order WHERE uid='%s'`, uid)
@@ -131,8 +138,16 @@ func (m *Model) cancelBuyOrder(uid string, accountID string) (err error) {
 }
 
 func (m *Model) submitSellOrder(uid string, accountID string, symbol string, amount float64, limit float64) (err error) {
-	// TODO: Write to cache
+	// TODO: Write to redis
 	sqlQuery := fmt.Sprintf(`INSERT INTO buy_order(uid, account_id, symbol, amount, limit) VALUES('%s', '%s', '%s', %f, %f);`, uid, accountID, symbol, amount, limit)
+	m.submitQuery(sqlQuery)
+	return err
+}
+
+func (m *Model) updateSellOrderAmount(uid string, newAmount float64) (err error) {
+	// TODO: Write to redis
+
+	sqlQuery := fmt.Sprintf(`UPDATE sell_order SET amount=%f WHERE uid = '%s'`, newAmount, uid)
 	m.submitQuery(sqlQuery)
 	return err
 }
