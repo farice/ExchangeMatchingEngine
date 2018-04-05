@@ -14,7 +14,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const user = "andrewbihl"
+const user = "postgres"
 const dbname = "exchange"
 const sslmode = "disable"
 const bufferCapacity = 1
@@ -46,7 +46,7 @@ func SharedModel() *Model {
 }
 
 func dbInfoString() (info string) {
-	return fmt.Sprintf("user=%s dbname=%s sslmode=%s", user, dbname, sslmode)
+	return fmt.Sprintf("user=%s dbname=%s sslmode=%s host=db", user, dbname, sslmode)
 }
 
 // var shared Model = {db, make(chan string, 100)}
