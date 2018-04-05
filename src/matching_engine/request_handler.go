@@ -475,7 +475,7 @@ func (q *Query) handleQuery() (resp string, err error) {
 	}
 
 	remaining_amount, _ := strconv.ParseFloat(order_info[0], 64)
-	if (remaining_amount > 0 ) {
+	if (remaining_amount != 0 ) {
 		open := OpenQueryResponse{Shares: order_info[0]}
 		if open_string, err := xml.MarshalIndent(open, "", "    "); err == nil {
 			resp += string(open_string) + "\n"
