@@ -227,6 +227,7 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 	}
 
 	log.WithFields(log.Fields{
+		"transId": transId_str,
 		"buy amount (USD)": order_amt * limit_f,
 		"balance":          bal_float,
 	}).Info("Funds")
@@ -324,6 +325,7 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 	}
 
 	log.WithFields(log.Fields{
+		"transId": transId_str,
 		"sell amount":  -1 * order_amt,
 		"shares owned": so_float,
 	}).Info("Holdings")
@@ -414,7 +416,7 @@ func (q *Query) handleQuery() (err error) {
 	defer match_mux.Unlock()
 	conn := redis.Pool.Get()
 	defer conn.Close()
-	
+
 	data, _ := redigo.Strings(conn.Do("HMGET", "order:"+trId, "account", "symbol", "limit", "amount"))
 	log.WithFields(log.Fields{
 		"data": data,
