@@ -3,9 +3,10 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"redis"
-	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
+
 	//"time"
 
 	"github.com/farice/EME/redis"
@@ -17,15 +18,15 @@ import (
 const user = "andrewbihl"
 const dbname = "exchange"
 const sslmode = "disable"
-const dbInfoString = fmt.Sprintf("user=%s dbname=%s sslmode=%s", user, dbname, sslmode)
 
 // Singleton approach found here: http://marcio.io/2015/07/singleton-pattern-in-go/#comment-2132217074
 var initialized uint32
 var instance *Model
+var mu sync.Mutex
 
 func SharedModel() *Model {
 
-	if atomic.LoadUInt32(&initialized) == 1 {
+	if atomic.LoadUint32(&initialized) == 1 {
 		return instance
 	}
 
@@ -33,7 +34,7 @@ func SharedModel() *Model {
 	defer mu.Unlock()
 
 	if initialized == 0 {
-		db, err := sql.Open("postgres", dbInfoString)
+		db, err := sql.Open("postgres", dbInfoString())
 		if err != nil {
 			log.Fatal("DATABASE ERROR: ", err)
 			return nil
@@ -42,6 +43,10 @@ func SharedModel() *Model {
 		atomic.StoreUint32(&initialized, 1)
 	}
 	return instance
+}
+
+func dbInfoString() (info string) {
+	return fmt.Sprintf("user=%s dbname=%s sslmode=%s", user, dbname, sslmode)
 }
 
 // var shared Model = {db, make(chan string, 100)}
@@ -70,9 +75,10 @@ func (m *Model) createAccountWithID(uid string, balance float64) (err error) {
 
 func (m *Model) getAccountBalance(accountID string) (balance float64, err error) {
 	// Attempt fetch from redis
-	bal, _ := redis.GetField("acct:"+acctId, "balance")
+	bal, _ := redis.GetField("acct:"+accountID, "balance")
 	if bal != nil {
-		balance = strconv.ParseFloat(string(bal.([]byte)), 64)
+		// TODO: Fix the error in the following line
+		// balance = strconv.ParseFloat(string(bal.([]byte)), 64)
 		return balance, nil
 	}
 
@@ -86,22 +92,24 @@ func (m *Model) getAccountBalance(accountID string) (balance float64, err error)
 	return balance, nil
 }
 
-func (m *Model) addAccountBalance(accountID string, balance float64) (err error) {
+func (m *Model) addAccountBalance(accountID string, amount float64) (err error) {
 	ex, _ := redis.HExists("acct:"+accountID, "balance")
 	if ex == false {
 		// Should return err if cannot find row.
-		err = db.QueryRow(`UPDATE symbol SET balance=%f WHERE uid='%s'`, balance, accountID)
-		// TODO: Add account to redis store
-
+		var currentAmount float64
+		err = m.db.QueryRow(fmt.Sprintf(`GET balance FROM account WHERE uid='%s'`, accountID)).Scan(&currentAmount)
 		// If user does not exist
 		if err != nil {
 			err = fmt.Errorf("User %s does not exist", accountID)
+			return err
 		}
-		return
+		err = m.db.QueryRow(fmt.Sprintf(`UPDATE symbol SET balance=%f WHERE uid='%s'`, currentAmount+amount, accountID)).Scan()
+		// TODO: Add account to redis store
+
+		return nil
 	}
-
-	redis.HIncrByFloat("acct:"+acctId, "balance", amount)
-
+	redis.HIncrByFloat("acct:"+accountID, "balance", amount)
+	return nil
 }
 
 /// Orders
@@ -187,11 +195,16 @@ func (m *Model) getSymbolSharesTotal(symbol string) (symbolExists bool, shares f
 
 /// Positions
 
-func (m *Model) createPosition(accountID string, symbol string, amount float64) {
-	// TODO: Write to cache
-	uid := ksuid.New().String()
-	sqlQuery := fmt.Sprintf(`INSERT INTO position(uid, account_id, symbol, amount) VALUES('$s', '%s', '%s', %f)`, uid, accountID, symbol, amount)
-	m.submitQuery(sqlQuery)
+func (m *Model) updatePosition(accountID string, symbol string, amount float64) (uid string) {
+	positionExists := false
+	if !positionExists {
+		// TODO: Write to cache
+		uid = ksuid.New().String()
+		sqlQuery := fmt.Sprintf(`INSERT INTO position(uid, account_id, symbol, amount) VALUES('%s', '%s', '%s', %f)`, uid, accountID, symbol, amount)
+		m.submitQuery(sqlQuery)
+		return uid
+	}
+	return ""
 }
 
 func (m *Model) removePosition(uid string) {
@@ -202,6 +215,11 @@ func (m *Model) removePosition(uid string) {
 
 /// Implementation / private
 
+func confirmDelete(deleteQuery string) {
+	print("Deleting entity with query: ")
+	println(deleteQuery)
+}
+
 func (m *Model) submitQuery(query string) {
 	m.commands <- query
 }
@@ -210,13 +228,27 @@ func (m *Model) executeQueries() {
 	log.Info(fmt.Sprintf("Flushing SQL commands. There are %d commands in the buffer.", len(m.commands)))
 	for len(m.commands) > 0 {
 		s := <-m.commands
-		if strings.HasPrefix(s, "DELETE") {
-			// TODO: Set up listener for record update to cache
-			listener := pq.NewListener(dbInfoString, 10*time.Second, time.Minute, reportProblem)
+		var query string
+		isDelete := strings.HasPrefix(s, "DELETE")
+		if isDelete {
+			query = s
 		}
+		// reportProblem := func(ev pq.ListenerEventType, err error) {
+		// 	if err != nil {
+		// 		fmt.Println(err.Error())
+		// 	}
+		// }
+
+		// TODO: Set up listener for record update to cache
+		// listener := pq.NewListener(dbInfoString(), 10*time.Second, time.Minute, reportProblem)
+		// listener := pq.NewListener()
 		_, err := m.db.Exec(s)
 		if err != nil {
 			log.Error("SQL database error: ", err)
+		}
+		if isDelete {
+			// Dispatch to other thread?
+			go confirmDelete(query)
 		}
 	}
 }
