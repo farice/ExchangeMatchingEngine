@@ -140,7 +140,7 @@ func (m *Model) cancelBuyOrder(uid string, accountID string) (err error) {
 
 func (m *Model) createSellOrder(uid string, accountID string, symbol string, amount float64, priceLimit float64) (err error) {
 	// TODO: Write to redis
-	sqlQuery := fmt.Sprintf(`INSERT INTO buy_order(uid, account_id, symbol, amount, price_limit) VALUES('%s', '%s', '%s', %f, %f);`, uid, accountID, symbol, amount, priceLimit)
+	sqlQuery := fmt.Sprintf(`INSERT INTO sell_order(uid, account_id, symbol, amount, price_limit) VALUES('%s', '%s', '%s', %f, %f);`, uid, accountID, symbol, amount, priceLimit)
 	m.submitQuery(sqlQuery)
 	return err
 }
