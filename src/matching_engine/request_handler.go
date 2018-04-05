@@ -404,6 +404,25 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 	return
 }
 
+func (q *Query) handleQuery() (err error) {
+	trId := q.TransactionID
+	if trId == "" {
+		err = fmt.Errorf("Invalid Query")
+		return
+	}
+	match_mux.Lock()
+	defer match_mux.Unlock()
+	conn := redis.Pool.Get()
+	defer conn.Close()
+	
+	data, _ := redigo.Strings(conn.Do("HMGET", "order:"+trId, "account", "symbol", "limit", "amount"))
+	log.WithFields(log.Fields{
+		"data": data,
+	}).Info("Queried transaction.")
+
+	return
+}
+
 func (order *Order) openOrder(acctId string) (transId int, err error) {
 	log.Info("Creating order...")
 	transId = IncAndGet()
@@ -703,6 +722,8 @@ func parseXML(req []byte) (results string) {
 							log.WithFields(log.Fields{
 								"parsed": qry,
 							}).Info("Query")
+
+							qry.handleQuery()
 						default:
 
 						}
