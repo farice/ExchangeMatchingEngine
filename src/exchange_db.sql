@@ -26,3 +26,9 @@ CREATE TABLE IF NOT EXISTS symbol (
     name varchar PRIMARY KEY,
     shares float
 );
+CREATE TABLE IF NOT EXISTS transaction (
+    symbol varchar,
+    amount float,
+    price float,
+    transaction_time time
+);

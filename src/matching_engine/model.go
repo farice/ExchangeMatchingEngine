@@ -3,12 +3,11 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"strconv"
-
-	//"time"
+	"time"
 
 	"github.com/farice/EME/redis"
 	_ "github.com/lib/pq"
@@ -147,6 +146,10 @@ func (m *Model) cancelSellOrder(uid string, accountID string) (err error) {
 	return
 }
 
+func (m *Model) getMaximumBuyOrder(symbol string, limit float64, maximum float64) (uid string, err error) {
+
+}
+
 func (m *Model) getMinimumSellOrder(symbol string, limit float64, maximum float64) (uid string, err error) {
 	// TODO: Find in cache
 
@@ -157,6 +160,15 @@ func (m *Model) getMinimumSellOrder(symbol string, limit float64, maximum float6
 		return "", err
 	}
 	return uid, nil
+}
+
+/// Transactions
+
+func (m *Model) createTransaction(symbol string, amount float64, price float64, transactionTime time.Time) {
+	// TODO: Create in redis
+
+	sqlQuery := fmt.Sprintf(`INSERT INTO transaction(symbol, amount, price, transaction_time VALUES('%s', %f, %f, %v)`, symbol, amount, price, transactionTime)
+	m.submitQuery(sqlQuery)
 }
 
 /// Symbols
