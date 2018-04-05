@@ -62,6 +62,24 @@ type Query struct {
 	TransactionID string   `xml:"id,attr"`
 }
 
+type OpenQueryResponse struct {
+	XMLName xml.Name `xml:"open"`
+	Shares string   `xml:"shares,attr"`
+}
+
+type CancelQueryResponse struct {
+	XMLName xml.Name `xml:"canceled"`
+	Shares string   `xml:"shares,attr"`
+	Time string `xml:"time,attr"`
+}
+
+type ExecutedQueryResponse struct {
+	XMLName xml.Name `xml:"executed"`
+	Shares string   `xml:"shares,attr"`
+	Price string   `xml:"price,attr"`
+	Time string `xml:"time,attr"`
+}
+
 type OpenResponse struct {
 	XMLName       xml.Name `xml:"opened"`
 	TransactionID string   `xml:"id,attr"`
@@ -419,12 +437,14 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 	return
 }
 
-func (q *Query) handleQuery() (err error) {
+func (q *Query) handleQuery() (resp string, err error) {
 	trId := q.TransactionID
 	if trId == "" {
 		err = fmt.Errorf("Invalid Query")
 		return
 	}
+	resp += "<status>\n"
+
 	match_mux.Lock()
 	defer match_mux.Unlock()
 	conn := redis.Pool.Get()
@@ -440,6 +460,29 @@ func (q *Query) handleQuery() (err error) {
 		"Transactions": transactions,
 	}).Info("Execution history")
 
+	if len(transactions) % 3 != 0 {
+		resp = ""
+		err = fmt.Errorf("Malformed Redis Data")
+		return
+	}
+
+	len_trans := len(transactions) / 3
+	for i := 0; i < len_trans; i++ {
+		exec := ExecutedQueryResponse{Shares: transactions[3 * i], Price: transactions[3 * i + 1], Time: transactions[3 * i + 2]}
+		if exec_string, err := xml.MarshalIndent(exec, "", "    "); err == nil {
+			resp += string(exec_string) + "\n"
+		}
+	}
+
+	remaining_amount, _ := strconv.ParseFloat(order_info[0], 64)
+	if (remaining_amount > 0 ) {
+		open := OpenQueryResponse{Shares: order_info[0]}
+		if open_string, err := xml.MarshalIndent(open, "", "    "); err == nil {
+			resp += string(open_string) + "\n"
+		}
+	}
+
+	resp += "<status/>\n"
 
 	return
 }
@@ -744,7 +787,8 @@ func parseXML(req []byte) (results string) {
 								"parsed": qry,
 							}).Info("Query")
 
-							qry.handleQuery()
+							resp, _ := qry.handleQuery()
+							results += resp + "\n"
 						default:
 
 						}
