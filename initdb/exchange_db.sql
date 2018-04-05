@@ -1,4 +1,5 @@
 CREATE DATABASE exchange OWNER postgres;
+\connect exchange;
 CREATE TABLE IF NOT EXISTS account (
     uid varchar PRIMARY KEY,
     balance float
