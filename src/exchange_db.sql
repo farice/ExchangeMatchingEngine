@@ -32,3 +32,5 @@ CREATE TABLE IF NOT EXISTS transaction (
     price float,
     transaction_time time
 );
+CREATE INDEX buy_limit ON buy_order (limit);
+CREATE INDEX sell_limit ON sell_order (limit);
