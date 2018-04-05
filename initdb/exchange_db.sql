@@ -1,3 +1,4 @@
+CREATE DATABASE exchange OWNER andrewbihl;
 CREATE TABLE IF NOT EXISTS account (
     uid varchar PRIMARY KEY,
     balance float
