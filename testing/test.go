@@ -20,7 +20,7 @@ func readAll(filePth string) ([]byte, error) {
 	return ioutil.ReadAll(f)
 }
 
-func send(filePth string) {
+func send(filePth string) {	
 	conn, err := net.Dial("tcp", "127.0.0.1:12345")
 	checkError(err)
 	defer conn.Close()
@@ -31,11 +31,12 @@ func send(filePth string) {
 	fmt.Println("send msg")
 }
 
+
 func main() {
 	args := os.Args
     if args == nil || len(args) != 2{
         return
     }
     path := args[1]
-	send(path)
+    send(path)
 }
