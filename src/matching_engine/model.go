@@ -126,6 +126,7 @@ func (m *Model) updateBuyOrderAmount(uid string, newAmount float64) (err error) 
 
 	sqlQuery := fmt.Sprintf(`UPDATE sell_order SET amount=%f WHERE uid = '%s'`, newAmount, uid)
 	m.submitQuery(sqlQuery)
+	return nil
 }
 
 func (m *Model) cancelBuyOrder(uid string, accountID string) (err error) {
