@@ -6,6 +6,5 @@
 - Write matching logic
 - Test speed of SQL query flushing. May need to explore options for dispatch.
 
-BUGS: 
-
+**Bugs:** 
 - createOrUpdateSymbol() only re-creates symbols; does not balance to existing symbols.
