@@ -1,14 +1,14 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TABLE IF NOT EXISTS account (
-    uid uuid PRIMARY KEY DEFAULT uuid_generate_v1(),
+    uid varchar PRIMARY KEY,
     balance float
 );
 CREATE TABLE IF NOT EXISTS position (
-    uid uuid PRIMARY KEY DEFAULT uuid_generate_v1(),
     account_id varchar,
     symbol varchar,
-    amount float
+    amount float, 
+    PRIMARY KEY(account_id, symbol)
 );
 CREATE TABLE IF NOT EXISTS buy_order (
     uid uuid PRIMARY KEY DEFAULT uuid_generate_v1(),
