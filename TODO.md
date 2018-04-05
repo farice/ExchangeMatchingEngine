@@ -7,4 +7,4 @@
 - Test speed of SQL query flushing. May need to explore options for dispatch.
 
 **Bugs:** 
-- createOrUpdateSymbol() only re-creates symbols; does not balance to existing symbols.
+- createOrUpdateSymbol() only re-creates symbols; does not add balance to existing symbols.
