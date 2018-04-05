@@ -77,6 +77,11 @@ func (m *Model) getAccountBalance(accountID string) (balance float64, err error)
 	// Attempt fetch from redis
 	log.Info("Get account balance.")
 	bal, err := redis.GetField("acct:"+accountID, "balance")
+	if bal == nil {
+		// If a user balance is nil, it does not exist
+		err = fmt.Errorf("User %s does not exist", acctId)
+		return
+	}
 	if err == nil {
 		// TODO: Fix the error in the following line
 		balance, err = strconv.ParseFloat(string(bal.([]byte)), 64)
