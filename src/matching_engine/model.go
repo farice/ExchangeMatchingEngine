@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"strconv"
 
 	//"time"
 
@@ -74,10 +75,11 @@ func (m *Model) createAccountWithID(uid string, balance float64) (err error) {
 
 func (m *Model) getAccountBalance(accountID string) (balance float64, err error) {
 	// Attempt fetch from redis
-	bal, _ := redis.GetField("acct:"+accountID, "balance")
-	if bal != nil {
+	log.Info("Get account balance.")
+	bal, err := redis.GetField("acct:"+accountID, "balance")
+	if err == nil {
 		// TODO: Fix the error in the following line
-		// balance = strconv.ParseFloat(string(bal.([]byte)), 64)
+		balance, err = strconv.ParseFloat(string(bal.([]byte)), 64)
 		return balance, nil
 	}
 
