@@ -150,7 +150,7 @@ func executeOrder(
 		return
 	}
 	// Update in Executed shares list
-	_, err = conn.Do("LPUSH", "order-executed:"+s_trId, -1 * sharesToExecute, exec_time)
+	_, err = conn.Do("RPUSH", "order-executed:"+s_trId, -1 * sharesToExecute, limit_usd, exec_time)
 	if err != nil {
 		return
 	}
@@ -158,7 +158,7 @@ func executeOrder(
 	if err != nil {
 		return
 	}
-	_, err = conn.Do("LPUSH", "order-executed:"+b_trId, sharesToExecute, exec_time)
+	_, err = conn.Do("RPUSH", "order-executed:"+b_trId, sharesToExecute, limit_usd, exec_time)
 
 	if err != nil {
 		return
@@ -430,10 +430,16 @@ func (q *Query) handleQuery() (err error) {
 	conn := redis.Pool.Get()
 	defer conn.Close()
 
-	data, _ := redigo.Strings(conn.Do("HMGET", "order:"+trId, "account", "symbol", "limit", "amount"))
+	order_info, _ := redigo.Strings(conn.Do("HMGET", "order:"+trId, "amount", "origAmount"))
 	log.WithFields(log.Fields{
-		"data": data,
-	}).Info("Queried transaction.")
+		"order info": order_info,
+	}).Info("Queried transaction")
+
+	transactions, _ := redigo.Strings(conn.Do("LRANGE", "order-executed:"+trId, 0, -1))
+	log.WithFields(log.Fields{
+		"Transactions": transactions,
+	}).Info("Execution history")
+
 
 	return
 }
