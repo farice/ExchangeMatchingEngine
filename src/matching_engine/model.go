@@ -114,9 +114,9 @@ func (m *Model) addAccountBalance(accountID string, amount float64) (err error) 
 
 /// Open orders
 
-func (m *Model) createBuyOrder(uid string, accountID string, symbol string, amount float64, limit float64) (err error) {
+func (m *Model) createBuyOrder(uid string, accountID string, symbol string, amount float64, priceLimit float64) (err error) {
 	// TODO: Write to cache
-	sqlQuery := fmt.Sprintf(`INSERT INTO buy_order(uid, account_id, symbol, amount, limit) VALUES('%s', '%s', '%s', %f, %f);`, uid, accountID, symbol, amount, limit)
+	sqlQuery := fmt.Sprintf(`INSERT INTO buy_order(uid, account_id, symbol, amount, price_limit) VALUES('%s', '%s', '%s', %f, %f);`, uid, accountID, symbol, amount, priceLimit)
 	m.submitQuery(sqlQuery)
 	return err
 }
@@ -138,9 +138,9 @@ func (m *Model) cancelBuyOrder(uid string, accountID string) (err error) {
 	return err
 }
 
-func (m *Model) createSellOrder(uid string, accountID string, symbol string, amount float64, limit float64) (err error) {
+func (m *Model) createSellOrder(uid string, accountID string, symbol string, amount float64, priceLimit float64) (err error) {
 	// TODO: Write to redis
-	sqlQuery := fmt.Sprintf(`INSERT INTO buy_order(uid, account_id, symbol, amount, limit) VALUES('%s', '%s', '%s', %f, %f);`, uid, accountID, symbol, amount, limit)
+	sqlQuery := fmt.Sprintf(`INSERT INTO buy_order(uid, account_id, symbol, amount, price_limit) VALUES('%s', '%s', '%s', %f, %f);`, uid, accountID, symbol, amount, priceLimit)
 	m.submitQuery(sqlQuery)
 	return err
 }
@@ -162,10 +162,10 @@ func (m *Model) cancelSellOrder(uid string, accountID string) (err error) {
 	return
 }
 
-func (m *Model) getMaximumBuyOrder(symbol string, limit float64) (uid string, err error) {
+func (m *Model) getMaximumBuyOrder(symbol string, priceLimit float64) (uid string, err error) {
 	// TODO: Get from redis
 
-	sqlQuery := fmt.Sprintf(`SELECT TOP 1 uid FROM buy_order WHERE limit=(SELECT MAX(limit) FROM buy_order WHERE symbol=%s)  AND limit >= %f`, symbol, limit)
+	sqlQuery := fmt.Sprintf(`SELECT TOP 1 uid FROM buy_order WHERE price_limit=(SELECT MAX(price_limit) FROM buy_order WHERE symbol=%s)  AND price_limit >= %f`, symbol, priceLimit)
 	err = m.db.QueryRow(sqlQuery).Scan(&uid)
 	if err != nil {
 		return "", err
@@ -174,11 +174,11 @@ func (m *Model) getMaximumBuyOrder(symbol string, limit float64) (uid string, er
 
 }
 
-func (m *Model) getMinimumSellOrder(symbol string, limit float64) (uid string, err error) {
+func (m *Model) getMinimumSellOrder(symbol string, priceLimit float64) (uid string, err error) {
 	// TODO: Find in cache
 
 	// If must go to db
-	sqlQuery := fmt.Sprintf(`SELECT TOP 1 uid FROM sell_order WHERE limit=(SELECT MIN(limit) FROM sell_order WHERE symbol=%s)  AND limit <= %f`, symbol, limit)
+	sqlQuery := fmt.Sprintf(`SELECT TOP 1 uid FROM sell_order WHERE price_limit=(SELECT MIN(price_limit) FROM sell_order WHERE symbol=%s)  AND price_limit <= %f`, symbol, priceLimit)
 	err = m.db.QueryRow(sqlQuery).Scan(&uid)
 	if err != nil {
 		return "", err
