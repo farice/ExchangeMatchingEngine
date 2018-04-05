@@ -18,6 +18,7 @@ import (
 const user = "andrewbihl"
 const dbname = "exchange"
 const sslmode = "disable"
+const bufferCapacity = 1
 
 // Singleton approach found here: http://marcio.io/2015/07/singleton-pattern-in-go/#comment-2132217074
 var initialized uint32
@@ -39,7 +40,7 @@ func SharedModel() *Model {
 			log.Fatal("DATABASE ERROR: ", err)
 			return nil
 		}
-		instance = &Model{db, make(chan string, 100)}
+		instance = &Model{db, make(chan string, bufferCapacity)}
 		atomic.StoreUint32(&initialized, 1)
 	}
 	return instance
@@ -59,7 +60,7 @@ type Model struct {
 
 /// Accounts
 
-func (m *Model) createAccount(balance float64) (uid string, err error) {
+func (m *Model) createAccount(uid string, balance float64) (uid string, err error) {
 	// TODO: Write to cache
 	uid = ksuid.New().String()
 	err = m.createAccountWithID(uid, balance)
@@ -114,12 +115,11 @@ func (m *Model) addAccountBalance(accountID string, amount float64) (err error) 
 
 /// Orders
 
-func (m *Model) submitBuyOrder(accountID string, symbol string, amount float64, limit float64) (orderID string, err error) {
+func (m *Model) submitBuyOrder(uid string, accountID string, symbol string, amount float64, limit float64) (err error) {
 	// TODO: Write to cache
-	uid := ksuid.New().String()
 	sqlQuery := fmt.Sprintf(`INSERT INTO buy_order(uid, account_id, symbol, amount, limit) VALUES('%s', '%s', '%s', %f, %f);`, uid, accountID, symbol, amount, limit)
 	m.submitQuery(sqlQuery)
-	return uid, err
+	return err
 }
 
 func (m *Model) cancelBuyOrder(uid string, accountID string) (err error) {
@@ -131,12 +131,11 @@ func (m *Model) cancelBuyOrder(uid string, accountID string) (err error) {
 	return err
 }
 
-func (m *Model) submitSellOrder(accountID string, symbol string, amount float64, limit float64) (orderID string, err error) {
+func (m *Model) submitSellOrder(accountID string, symbol string, amount float64, limit float64) (err error) {
 	// TODO: Write to cache
-	uid := ksuid.New().String()
 	sqlQuery := fmt.Sprintf(`INSERT INTO buy_order(uid, account_id, symbol, amount, limit) VALUES('%s', '%s', '%s', %f, %f);`, uid, accountID, symbol, amount, limit)
 	m.submitQuery(sqlQuery)
-	return uid, err
+	return err
 }
 
 func (m *Model) cancelSellOrder(uid string, accountID string) (err error) {
@@ -195,22 +194,35 @@ func (m *Model) getSymbolSharesTotal(symbol string) (symbolExists bool, shares f
 
 /// Positions
 
-func (m *Model) updatePosition(accountID string, symbol string, amount float64) (uid string) {
+func (m *Model) updatePosition(accountID string, symbol string, amount float64) (err error) {
 	positionExists := false
+	fetchQuery := fmt.Sprintf(`SELECT amount FROM position WHERE account_id='%s' AND symbol='%s'`, accountID, symbol)
+	var currentAmount float64
+	err = m.db.QueryRow(fetchQuery).Scan(&currentAmount)
+	positionExists = err == nil
 	if !positionExists {
 		// TODO: Write to cache
-		uid = ksuid.New().String()
-		sqlQuery := fmt.Sprintf(`INSERT INTO position(uid, account_id, symbol, amount) VALUES('%s', '%s', '%s', %f)`, uid, accountID, symbol, amount)
+		sqlQuery := fmt.Sprintf(`INSERT INTO position(account_id, symbol, amount) VALUES('%s', '%s', %f)`, accountID, symbol, amount)
 		m.submitQuery(sqlQuery)
-		return uid
+		return nil
 	}
-	return ""
+	sqlQuery := fmt.Sprintf(`UPDATE position SET amount=%f WHERE account_id = '%s' AND symbol='%s'`, currentAmount+amount, accountID, symbol)
+	m.submitQuery(sqlQuery)
+	return nil
 }
 
-func (m *Model) removePosition(uid string) {
+func (m *Model) removePosition(accountID string, symbol string) (err error) {
 	// TODO: Update cache
-	sqlQuery := fmt.Sprintf(`DELETE FROM position WHERE uid='%s'`, uid)
+	sqlQuery := fmt.Sprintf(`DELETE FROM position WHERE account_id='%s' AND symbol='%s';`, accountID, symbol)
 	m.submitQuery(sqlQuery)
+	return nil
+}
+
+func (m *Model) getPositionAmount(accountID string, symbol string) (amount float64, err error) {
+	sqlQuery := fmt.Sprintf(`SELECT amount FROM position WHERE account_id='%s' AND symbol='%s';`, accountID, symbol)
+	println("QUERY: ", sqlQuery)
+	err = m.db.QueryRow(sqlQuery).Scan(&amount)
+	return amount, err
 }
 
 /// Implementation / private
@@ -222,6 +234,9 @@ func confirmDelete(deleteQuery string) {
 
 func (m *Model) submitQuery(query string) {
 	m.commands <- query
+	if len(m.commands) >= bufferCapacity {
+		m.executeQueries()
+	}
 }
 
 func (m *Model) executeQueries() {
