@@ -698,7 +698,7 @@ func parseXML(req []byte) (results string) {
 					}
 				}
 
-				results += "</results>"
+				results += "</results>\n"
 				return results
 			}
 
@@ -801,7 +801,7 @@ func parseXML(req []byte) (results string) {
 					}
 
 				}
-				results += "</results>"
+				results += "</results>\n"
 				return results
 			}
 		default:
