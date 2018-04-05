@@ -482,7 +482,7 @@ func (q *Query) handleQuery() (resp string, err error) {
 		}
 	}
 
-	resp += "<status/>\n"
+	resp += "</status>"
 
 	return
 }
