@@ -71,7 +71,7 @@ func main() {
 		}).Info("New client connection")
 		clientCount += 1
 
-		c.Send("Hello\n")
+		//c.Send("Hello\n")
 
 	})
 
