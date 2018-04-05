@@ -1,5 +1,4 @@
-CREATE USER andrewbihl;
-CREATE DATABASE exchange OWNER andrewbihl;
+CREATE DATABASE exchange OWNER postgres;
 CREATE TABLE IF NOT EXISTS account (
     uid varchar PRIMARY KEY,
     balance float
