@@ -7,6 +7,7 @@ import (
 	"math"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/farice/EME/redis"
 	redigo "github.com/gomodule/redigo/redis"
@@ -142,11 +143,23 @@ func executeOrder(
 	}
 
 	conn := redis.Pool.Get()
+	exec_time := time.Now().String()
 	_, err = conn.Do("HSET", "order:"+s_trId, "amount", s_amt_f+sharesToExecute)
+
+	if err != nil {
+		return
+	}
+	// Update in Executed shares list
+	_, err = conn.Do("LPUSH", "order-executed:"+s_trId, -1 * sharesToExecute, exec_time)
 	if err != nil {
 		return
 	}
 	_, err = conn.Do("HSET", "order:"+b_trId, "amount", b_amt_f-sharesToExecute)
+	if err != nil {
+		return
+	}
+	_, err = conn.Do("LPUSH", "order-executed:"+b_trId, sharesToExecute, exec_time)
+
 	if err != nil {
 		return
 	}
