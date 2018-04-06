@@ -382,7 +382,6 @@ func (m *Model) getTransaction(trId string) (data []string, err error) {
 /// Symbols
 
 func (m *Model) createOrUpdateSymbol(symbol string) (err error) {
-	println("ANFKB_#RWJOQEWNDSFBJQ)TQEWJFDOSNKGALSDF)JAONSDFPASDJ)FANOSDFJ")
 	ex, _ := redis.Exists("sym:" + symbol)
 	if !ex {
 		redis.Set("sym:"+symbol, "")
@@ -396,7 +395,6 @@ func (m *Model) createOrUpdateSymbol(symbol string) (err error) {
 
 // Add shares to existing position or set shares to value if dne
 func (m *Model) addOrSetSharesToPosition(accountID string, symbol string, amount float64) (err error) {
-	println("@@@@@@@@ addOrSetSharesToPosition")
 	ex, _ := redis.HExists("acct:"+accountID+":positions", symbol)
 
 	if ex {
@@ -422,8 +420,6 @@ func (m *Model) addOrSetSharesToPosition(accountID string, symbol string, amount
 }
 
 func (m *Model) addSharesToPosition(accountID string, symbol string, amount float64) (err error) {
-	println("@@@@@@@@ addSharesToPosition")
-
 	_, err = redis.HIncrByFloat("acct:"+accountID+":positions", symbol, amount)
 
 	sqlQuery := fmt.Sprintf(`UPDATE position SET amount=amount+%f WHERE account_id = '%s' AND symbol='%s'`, amount, accountID, symbol)
@@ -433,7 +429,6 @@ func (m *Model) addSharesToPosition(accountID string, symbol string, amount floa
 }
 
 // func (m *Model) updatePosition(accountID string, symbol string, amount float64) (err error) {
-// 	println("@@@@@@@@ updatePosition")
 // 	positionExists := false
 // 	fetchQuery := fmt.Sprintf(`SELECT amount FROM position WHERE account_id='%s' AND symbol='%s'`, accountID, symbol)
 // 	var currentAmount float64
@@ -467,7 +462,7 @@ func (m *Model) getPositionAmount(accountID string, symbol string) (amount float
 		return
 	} else {
 		sqlQuery := fmt.Sprintf(`SELECT amount FROM position WHERE account_id='%s' AND symbol='%s';`, accountID, symbol)
-		println("QUERY: ", sqlQuery)
+		// println("QUERY: ", sqlQuery)
 		err = m.db.QueryRow(sqlQuery).Scan(&amount)
 
 		if err != nil {
