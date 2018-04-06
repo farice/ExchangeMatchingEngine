@@ -97,7 +97,6 @@ func (m *Model) createAccount(uid string, balance string) (err error) {
 	}).Info("Created account")
 	// END TEST
 
-
 	// postgres
 	sqlQuery := fmt.Sprintf("INSERT INTO account(uid, balance) VALUES('%s', %f)", uid, balance)
 	m.submitQuery(sqlQuery)
@@ -394,7 +393,7 @@ func (m *Model) executeQueries() {
 		// listener := pq.NewListener()
 		_, err := m.db.Exec(s)
 		if err != nil {
-			log.Error("SQL database error: ", err)
+			log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, s))
 		}
 		if isDelete {
 			// Dispatch to other thread?
