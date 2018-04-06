@@ -303,7 +303,7 @@ func (m *Model) getMaximumBuyOrder(symbol string, priceLimit float64) (uid []str
 	err = m.db.QueryRow(sqlQuery).Scan(&uid)
 	if err != nil {
 		log.Error("SQL Error: %s -- Query: %s", err, sqlQuery)
-		return "", err
+		return
 	}
 	return uid, nil
 
@@ -338,7 +338,7 @@ func (m *Model) createTransaction(transId string, acctId string, sym string, lim
 	// TODO: Create in redis
 	conn := redis.Pool.Get()
 	defer conn.Close()
-	_, err = conn.Do("HMSET", "order:"+transId, "account", accountID, "symbol", sym, "limit", limit, "amount", amount, "origAmount", amount)
+	_, err = conn.Do("HMSET", "order:"+transId, "account", acctId, "symbol", sym, "limit", limit, "amount", amount, "origAmount", amount)
 
 	sqlQuery := fmt.Sprintf(`INSERT INTO transaction(symbol, amount, price, transaction_time VALUES('%s', %f, %f, %v)`, sym, amount, limit, transactionTime)
 	m.submitQuery(sqlQuery)
