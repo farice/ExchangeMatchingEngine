@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS transaction (
     symbol varchar,
     amount float,
     price float,
-    transaction_time time
+    transaction_time varchar
 );
 CREATE INDEX buy_limit ON buy_order (price_limit);
 CREATE INDEX sell_limit ON sell_order (price_limit);
