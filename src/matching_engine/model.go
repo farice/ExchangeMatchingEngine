@@ -211,12 +211,12 @@ func (m *Model) updateBuyOrderAmount(uid string, newAmount float64) (err error) 
 }
 
 // fills cancellation details
-func (m *Model) cancelOrder(trId string, amt_f float64, time string) (err error) {
+func (m *Model) cancelOrder(trId string, amt_f float64, timestamp string) (err error) {
 	defer LogMethodTimeElapsed("model.cancelOrder", time.Now())
 	log.Info("Cancel Order")
 	conn := redis.Pool.Get()
 	defer conn.Close()
-	_, err = conn.Do("HMSET", "order-cancel:"+trId, "amount", amt_f, "time", time)
+	_, err = conn.Do("HMSET", "order-cancel:"+trId, "amount", amt_f, "time", timestamp)
 
 	// Postgres removes the open order
 	var sqlQuery string
