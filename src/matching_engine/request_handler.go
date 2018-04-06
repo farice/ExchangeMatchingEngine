@@ -204,6 +204,11 @@ func closeOpenOrder(buy bool, sym string, transId string) (err error) {
 		_, err = conn.Do("ZREM", "open-sell:"+sym, transId)
 	}
 
+	log.WithFields(log.Fields{
+		"transId": transId,
+		"error": err,
+	}).Info("Removed open order from sorted set")
+
 	return
 
 }
