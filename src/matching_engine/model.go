@@ -350,7 +350,12 @@ func (m *Model) createTransaction(transId string, acctId string, sym string, lim
 	defer conn.Close()
 	_, err = conn.Do("HMSET", "order:"+transId, "account", acctId, "symbol", sym, "limit", limit, "amount", amount, "origAmount", amount)
 
-	sqlQuery := fmt.Sprintf(`INSERT INTO transaction(symbol, amount, price, transaction_time VALUES('%s', %f, %f, %v)`, sym, amount, limit, transactionTime)
+	amountFloat, _ := strconv.ParseFloat(amount, 64)
+	limitFloat, _ := strconv.ParseFloat(limit, 64)
+
+	formattedTime := transactionTime.String()
+
+	sqlQuery := fmt.Sprintf(`INSERT INTO transaction(symbol, amount, price, transaction_time) VALUES('%s', %f, %f, '%s')`, sym, amountFloat, limitFloat, formattedTime)
 	m.submitQuery(sqlQuery)
 
 	return
