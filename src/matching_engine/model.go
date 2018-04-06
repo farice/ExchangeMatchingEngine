@@ -128,7 +128,8 @@ func (m *Model) getAccountBalance(accountID string) (balance float64, err error)
 	err = m.db.QueryRow(sqlQuery).Scan(&balance)
 	if err != nil {
 		log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
-		return -1, err
+		err = fmt.Errorf("Account does not exist")
+		return
 	}
 	return balance, nil
 }
