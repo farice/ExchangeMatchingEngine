@@ -60,7 +60,7 @@ type Model struct {
 
 // Counter
 
-func (m* Model) incTransactionCounter() (ct int, err error) {
+func (m *Model) incTransactionCounter() (ct int, err error) {
 	ct, err = redis.Incr("TransactionCounter")
 
 	// TODO(maybe) - postgres
@@ -127,7 +127,7 @@ func (m *Model) getAccountBalance(accountID string) (balance float64, err error)
 	sqlQuery := fmt.Sprintf(`SELECT balance FROM account WHERE uid='%s'`, accountID)
 	err = m.db.QueryRow(sqlQuery).Scan(&balance)
 	if err != nil {
-		// log.Error("Error in fetch account balance: ", err)
+		log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
 		return -1, err
 	}
 	return balance, nil
@@ -138,13 +138,18 @@ func (m *Model) addAccountBalance(accountID string, amount float64) (err error) 
 	if ex == false {
 		// Should return err if cannot find row.
 		var currentAmount float64
-		err = m.db.QueryRow(fmt.Sprintf(`GET balance FROM account WHERE uid='%s'`, accountID)).Scan(&currentAmount)
+		sqlQuery := fmt.Sprintf(`GET balance FROM account WHERE uid='%s'`, accountID)
+		err = m.db.QueryRow(sqlQuery).Scan(&currentAmount)
 		// If user does not exist
 		if err != nil {
-			err = fmt.Errorf("User %s does not exist", accountID)
+			log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
 			return err
 		}
-		err = m.db.QueryRow(fmt.Sprintf(`UPDATE symbol SET balance=%f WHERE uid='%s'`, currentAmount+amount, accountID)).Scan()
+		sqlQuery = fmt.Sprintf(`UPDATE symbol SET balance=%f WHERE uid='%s'`, currentAmount+amount, accountID)
+		err = m.db.QueryRow(sqlQuery).Scan()
+		if err != nil {
+			log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
+		}
 		// TODO: Add account to redis store
 
 		return
@@ -191,16 +196,15 @@ func (m *Model) cancelOrder(trId string, amt_f float64, time string) (err error)
 	return
 }
 
-
 // is order cancelled
 func (m *Model) orderCancelled(trId string) (ex bool, err error) {
-	ex, err = redis.Exists("order-cancel:"+trId)
+	ex, err = redis.Exists("order-cancel:" + trId)
 	// TODO - postgres
 
 	return
 }
 
-func (m *Model) getCancelledOrderDetails(trId string) (cancel_info []string, err error){
+func (m *Model) getCancelledOrderDetails(trId string) (cancel_info []string, err error) {
 	conn := redis.Pool.Get()
 	defer conn.Close()
 
@@ -252,12 +256,15 @@ func (m *Model) closeOpenBuyOrder(uid string, sym string) (err error) {
 	// TODO - Fix query (syntax error)
 	sqlQuery := fmt.Sprintf(`DELETE FROM buy_order WHERE uid='%s'`, uid)
 	err = m.db.QueryRow(sqlQuery).Scan()
+	if err != nil {
+		log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
+	}
 	return
 }
 
 func (m *Model) createSellOrder(uid string, accountID string, symbol string, amount float64, limit_str string, priceLimit float64) (err error) {
 	// TODO: Write to redis
-	err = redis.Zadd("open-sell:"+symbol,limit_str, uid)
+	err = redis.Zadd("open-sell:"+symbol, limit_str, uid)
 
 	sqlQuery := fmt.Sprintf(`INSERT INTO sell_order(uid, account_id, symbol, amount, price_limit) VALUES('%s', '%s', '%s', %f, %f);`, uid, accountID, symbol, amount, priceLimit)
 	m.submitQuery(sqlQuery)
@@ -288,7 +295,9 @@ func (m *Model) closeOpenSellOrder(uid string, sym string) (err error) {
 	// If must go to db
 	sqlQuery := fmt.Sprintf(`DELETE FROM sell_order WHERE uid='%s'`, uid)
 	err = m.db.QueryRow(sqlQuery).Scan()
-
+	if err != nil {
+		log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
+	}
 	return
 }
 
@@ -320,6 +329,7 @@ func (m *Model) getMinimumSellOrder(symbol string, priceLimit float64) (uid []st
 	sqlQuery := fmt.Sprintf(`SELECT TOP 1 uid FROM sell_order WHERE price_limit=(SELECT MIN(price_limit) FROM sell_order WHERE symbol=%s)  AND price_limit <= %f`, symbol, priceLimit)
 	err = m.db.QueryRow(sqlQuery).Scan(&uid)
 	if err != nil {
+		log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
 		return
 	}
 	return uid, nil
@@ -328,7 +338,7 @@ func (m *Model) getMinimumSellOrder(symbol string, priceLimit float64) (uid []st
 /// Transactions
 
 func (m *Model) transactionExists(transId string) (ex bool, err error) {
-	ex, err = redis.Exists("order:"+transId)
+	ex, err = redis.Exists("order:" + transId)
 
 	// TODO - postgres
 
@@ -462,7 +472,8 @@ func (m *Model) getPositionAmount(accountID string, symbol string) (amount float
 		err = m.db.QueryRow(sqlQuery).Scan(&amount)
 
 		if err != nil {
-			err = fmt.Errorf("User owns no shares of %s", symbol)
+			// err = fmt.Errorf("User owns no shares of %s", symbol)
+			log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
 			return
 		}
 	}
