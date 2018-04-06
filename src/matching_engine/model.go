@@ -106,10 +106,10 @@ func (m *Model) createAccount(uid string, balance string) (err error) {
 	}).Info("Created account")
 	// END TEST
 
+	balanceFloat, _ := strconv.ParseFloat(balance, 64)
 	// postgres. Will reject if duplicate.
-	sqlQuery := fmt.Sprintf("INSERT INTO account(uid, balance) VALUES('%s', %f)", uid, bal_float)
+	sqlQuery := fmt.Sprintf("INSERT INTO account(uid, balance) VALUES('%s', %f)", uid, balanceFloat)
 	m.submitQuery(sqlQuery)
-
 	return
 }
 
