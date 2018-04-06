@@ -519,7 +519,12 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 	}
 
 	// set remaining amount to 0
-	_, err = conn.Do("HSET", "order:"+trId, "amount", 0.0)
+	if buy {
+		err = SharedModel().updateBuyOrderAmount(trId, 0.0)
+	} else {
+		err = SharedModel().updateSellOrderAmount(trId, 0.0)
+	}
+
 	if err != nil {
 		return
 	}
@@ -564,43 +569,9 @@ func (order *Order) openOrder(acctId string) (transId int, err error) {
 	return
 }
 
-func createAccount(acct *Account) error {
-	// This creates a new account with the given unique ID and balance (in USD).
-	// The account has no positions. Attempting to create an account that already
-	// exists is an error.
-	ex, _ := redis.Exists("acct:" + acct.Id)
-	if acct.Id == "" {
-		// TODO: - Throw and handle error
-		return nil
-	}
-	if ex {
-		log.WithFields(log.Fields{
-			"ID": acct.Id,
-		}).Info("Duplicate account")
-		return fmt.Errorf("Duplicate account")
-	}
-
-	// Redis HMSET, maps key to hashmap of fields to values
-	err := redis.SetField("acct:"+acct.Id, "balance", acct.Balance)
-
-	if err != nil {
-		log.WithFields(log.Fields{
-			"Error": err,
-		}).Error("error setting account")
-		return fmt.Errorf("Error creating account")
-	}
-
-	// TEST: - Retrieve key + field, then log
-	bal, _ := redis.GetField("acct:"+acct.Id, "balance")
-	bal_float, _ := strconv.ParseFloat(string(bal.([]byte)), 64)
-	log.WithFields(log.Fields{
-		"ID":             acct.Id,
-		"Balance":        bal_float,
-		"Verify_Balance": acct.Balance,
-	}).Info("Created account")
-	// END TEST
-
-	return nil
+func (acct *Account) createAccount() (err error) {
+	err = SharedModel().createAccount(acct.Id, acct.Balance)
+	return err
 }
 
 func createSymbol(sym *Symbol) error {
@@ -721,7 +692,7 @@ func parseXML(req []byte) (results string) {
 								"XML": acct,
 							}).Info("New create command: Account")
 
-							err = createAccount(&acct)
+							err = acct.createAccount()
 							if err == nil {
 								succ := CreatedResponse{Id: acct.Id}
 								if succ_string, err := xml.MarshalIndent(succ, "", "    "); err == nil {
