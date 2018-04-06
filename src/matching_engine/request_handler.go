@@ -732,6 +732,11 @@ func parseXML(req []byte) (results string) {
 				results += "</results>\n"
 				return results
 			}
+
+			if inElement == "dump" {
+				// TODO: dump the database
+				// store the output to the var "results"
+			}
 		default:
 		}
 	}

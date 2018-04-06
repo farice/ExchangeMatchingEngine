@@ -11,6 +11,10 @@ type Account struct {
 	Balance string   `xml:"balance,attr"`
 }
 
+type Dump struct {
+  XMLName xml.Name `xml:"dump"`
+}
+
 type Symbol struct {
 	XMLName  xml.Name `xml:"symbol"`
 	Sym      string   `xml:"sym,attr"`
