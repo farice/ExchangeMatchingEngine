@@ -345,18 +345,24 @@ func getOrderStatus(trId string) (resp string, err error) {
 }
 
 func (q *Query) handleQuery() (resp string, err error) {
+	resp += "<status>\n"
+
 	trId := q.TransactionID
 	if trId == "" {
 		err = fmt.Errorf("Invalid Query")
+		resp += "</status>"
 		return
 	}
-	resp += "<status>\n"
 
 	match_mux.Lock()
 	defer match_mux.Unlock()
 
 	status, err := getOrderStatus(trId)
 	if err != nil {
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Error("Error")
+		resp += "</status>"
 		return
 	}
 	resp += status
