@@ -154,6 +154,7 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 	var amountUnexecuted = order_amt
 
 	// loop until there are no more orders to execute
+	getMin:
 	for {
 		members, err = SharedModel().getMinimumSellOrder(sym, limit_f)
 		if err != nil {
@@ -180,15 +181,15 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 				amountExecuted, err = executeOrder(false, transId_str, acctId, sym, order.Limit, order.Amount, members[0], data[0], data[1], data[2], data[3])
 				amountUnexecuted -= amountExecuted
 				if amountUnexecuted == 0 {
-					break
+					break getMin
 				}
 
 			} else {
-				break
+				break getMin
 			}
 
 		} else {
-			break
+			break getMin
 		}
 	}
 
@@ -247,6 +248,7 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 
 	var sharesRemaining = order_amt // shares left to sell (<= 0)
 
+getMax:
 	for {
 
 		// find highest open buy order
@@ -276,13 +278,13 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 				amountExecuted, err = executeOrder(true, members[0], data[0], data[1], data[2], data[3], transId_str, acctId, sym, order.Limit, order.Amount)
 				sharesRemaining += amountExecuted
 				if sharesRemaining == 0 {
-					break
+					break getMax
 				}
 			} else {
-				break
+				break getMax
 			}
 		} else {
-			break
+			break getMax
 		}
 	}
 
@@ -391,19 +393,22 @@ func (q *Query) handleQuery() (resp string, err error) {
 
 func (c *Cancel) handleCancel() (resp string, err error) {
 	log.Info("handle cancel")
+	resp += "<canceled>\n"
+
 	trId := c.TransactionID
 	if trId == "" {
+		resp += "</canceled>"
 		err = fmt.Errorf("Invalid Query")
 		return
 	}
-	resp += "<canceled>\n"
+
 
 	match_mux.Lock()
 	defer match_mux.Unlock()
 
 	ex, _ := SharedModel().transactionExists(trId)
 	if !ex {
-		resp = ""
+		resp += "</canceled>"
 		err = fmt.Errorf("Transaction does not exist")
 		return
 	}
@@ -412,6 +417,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 	data, err := SharedModel().getOrder(trId)
 	acct, sym, limit, amt := data[0], data[1], data[2], data[3]
 	if err != nil {
+		resp += "</canceled>"
 		return
 	}
 
@@ -422,6 +428,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 
 	if len(data) != 5 {
 		err = fmt.Errorf("Malformed redis data")
+		resp += "</canceled>"
 		return
 	}
 
@@ -438,6 +445,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 		}
 
 		if err != nil {
+			resp += "</canceled>"
 			return
 		}
 
@@ -457,6 +465,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 		}
 
 		if err != nil {
+			resp += "</canceled>"
 			return
 		}
 
@@ -464,12 +473,14 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 		exec_time := time.Now().String()
 		err = SharedModel().cancelOrder(trId, amt_f, exec_time)
 		if err != nil {
+			resp += "</canceled>"
 			return
 		}
 	}
 
 	status, err := getOrderStatus(trId)
 	if err != nil {
+		resp += "</canceled>"
 		return
 	}
 	resp += status
