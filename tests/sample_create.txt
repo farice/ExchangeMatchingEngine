@@ -1,11 +1,13 @@
-289
+360
 <?xml version="1.0" encoding="UTF-8"?>
 <create>
  <account id="123456" balance="1000"/>
  <account id="11" balance="1000000"/>
+ <account id="12" balance="500"/>
  <account id="110100" balance="10"/>
  <symbol sym="SPY">
        <account id="123456">100000</account>
        <account id="11">100000</account>
+       <account id="12">50</account>
  </symbol>
 </create>
