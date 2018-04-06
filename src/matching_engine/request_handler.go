@@ -523,6 +523,8 @@ func createSymbol(sym *Symbol) (err error) {
 
 func parseXML(req []byte) (results string) {
 
+	defer LogMethodTimeElapsed("request_handler.parseXML", time.Now())
+
 	decoder := xml.NewDecoder(bytes.NewReader(req))
 	var inElement string
 	for {
@@ -739,6 +741,7 @@ func parseXML(req []byte) (results string) {
 // Send bytes to Connection
 func (c *Connection) handleRequest(req []byte) {
 	// New Message Received
+	defer LogMethodTimeElapsed("request_handler.handleRequest", time.Now())
 	results := parseXML(req)
 	c.Send(results)
 }

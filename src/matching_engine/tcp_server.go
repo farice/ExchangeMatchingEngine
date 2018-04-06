@@ -5,6 +5,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -62,12 +63,14 @@ func (c *Connection) listen() {
 
 // Send text message to Connection
 func (c *Connection) Send(message string) error {
+	defer LogMethodTimeElapsed("tcp_server.Send", time.Now())
 	_, err := c.conn.Write([]byte(message))
 	return err
 }
 
 // Send bytes to Connection
 func (c *Connection) SendBytes(b []byte) error {
+	defer LogMethodTimeElapsed("tcp_server.SendBytes", time.Now())
 	_, err := c.conn.Write(b)
 	return err
 }
@@ -89,11 +92,13 @@ func (s *server) OnNewConnection(callback func(c *Connection)) {
 
 // Called right after connection closed
 func (s *server) OnClientConnectionClosed(callback func(c *Connection, err error)) {
+	defer LogMethodTimeElapsed("tcp_server.OnClientConnectionClosed", time.Now())
 	s.onClientConnectionClosed = callback
 }
 
 // Called when Connection receives new message
 func (s *server) OnNewMessage(callback func(c *Connection, message []byte)) {
+	defer LogMethodTimeElapsed("tcp_server.OnNewMessage", time.Now())
 	s.onNewMessage = callback
 }
 

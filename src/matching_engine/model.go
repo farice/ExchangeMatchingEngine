@@ -484,6 +484,7 @@ func confirmDelete(deleteQuery string) {
 }
 
 func (m *Model) submitQuery(query string) {
+	defer LogMethodTimeElapsed("model.submitQuery", time.Now())
 	m.commands <- query
 	if len(m.commands) >= bufferCapacity {
 		m.executeQueries()
@@ -491,6 +492,7 @@ func (m *Model) submitQuery(query string) {
 }
 
 func (m *Model) executeQueries() {
+	defer LogMethodTimeElapsed("model.executeQueries", time.Now())
 	log.Info(fmt.Sprintf("Flushing SQL commands. There are %d commands in the buffer.", len(m.commands)))
 	for len(m.commands) > 0 {
 		s := <-m.commands
