@@ -437,23 +437,21 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 	return
 }
 
-func (q *Query) handleQuery() (resp string, err error) {
-	trId := q.TransactionID
-	if trId == "" {
-		err = fmt.Errorf("Invalid Query")
-		return
-	}
-	resp += "<status>\n"
-
-	match_mux.Lock()
-	defer match_mux.Unlock()
+func getOrderStatus(trId string) (resp string, err error) {
 	conn := redis.Pool.Get()
 	defer conn.Close()
+
+	ex, _ := redis.Exists("order:"+trId)
+	if !ex {
+		resp = ""
+		err = fmt.Errorf("Transaction does not exist")
+		return
+	}
 
 	order_info, _ := redigo.Strings(conn.Do("HMGET", "order:"+trId, "amount", "origAmount"))
 	log.WithFields(log.Fields{
 		"order info": order_info,
-	}).Info("Queried transaction")
+	}).Info("Status transaction")
 
 	transactions, _ := redigo.Strings(conn.Do("LRANGE", "order-executed:"+trId, 0, -1))
 	log.WithFields(log.Fields{
@@ -480,10 +478,113 @@ func (q *Query) handleQuery() (resp string, err error) {
 		if open_string, err := xml.MarshalIndent(open, "", "    "); err == nil {
 			resp += string(open_string) + "\n"
 		}
+	} else { // may have been cancelled!
+		ex, _ := redis.Exists("order-cancel:"+trId)
+		if ex {
+			cancel_info, _ := redigo.Strings(conn.Do("HMGET", "order-cancel:"+trId, "amount", "time"))
+			cancel := CancelQueryResponse{Shares: cancel_info[0], Time: cancel_info[1]}
+			if cancel_string, err := xml.MarshalIndent(cancel, "", "    "); err == nil {
+				resp += string(cancel_string) + "\n"
+			}
+		}
 	}
+
+	return
+}
+
+func (q *Query) handleQuery() (resp string, err error) {
+	trId := q.TransactionID
+	if trId == "" {
+		err = fmt.Errorf("Invalid Query")
+		return
+	}
+	resp += "<status>\n"
+
+	match_mux.Lock()
+	defer match_mux.Unlock()
+
+	status, err := getOrderStatus(trId)
+	if err != nil {
+		return
+	}
+	resp += status
 
 	resp += "</status>"
 
+	return
+}
+
+func (c *Cancel) handleCancel() (resp string, err error) {
+	trId := c.TransactionID
+	if trId == "" {
+		err = fmt.Errorf("Invalid Query")
+		return
+	}
+	resp += "<canceled>\n"
+
+	match_mux.Lock()
+	defer match_mux.Unlock()
+	conn := redis.Pool.Get()
+	defer conn.Close()
+
+	ex, _ := redis.Exists("order:"+trId)
+	if !ex {
+		resp = ""
+		err = fmt.Errorf("Transaction does not exist")
+		return
+	}
+
+	data, err := redigo.Strings(conn.Do("HMGET", "order:"+trId, "amount", "account", "limit", "sym"))
+	amt, acct, limit, sym := data[0], data[1], data[2], data[3]
+	if err != nil{
+		return
+	}
+
+	if len(data) != 4 {
+		err = fmt.Errorf("Malformed redis data")
+		return
+	}
+
+	amt_f, _ := strconv.ParseFloat(amt, 64)
+	buy := (amt_f > 0)
+
+	if amt_f != 0 {
+
+	// remove from open orders sorted set
+	err = closeOpenOrder(buy, sym, trId)
+	if err != nil {
+		return
+	}
+
+	if buy { // add money back to account if buy order
+		limit_f, _ := strconv.ParseFloat(limit, 64)
+		addAccountBalance(acct, limit_f * amt_f)
+
+	} else { // add shares back to account if sell order
+		addShares(acct, sym, -1 * amt_f)
+	}
+
+	// set remaining amount to 0
+	_, err = conn.Do("HSET", "order:"+trId, "amount", 0.0)
+	if err != nil {
+		return
+	}
+
+	// store info
+	exec_time := time.Now().String()
+	_, err = conn.Do("HMSET", "order-cancel:"+trId, "amount", amt_f, "time", exec_time)
+	if err != nil {
+		return
+	}
+}
+
+	status, err := getOrderStatus(trId)
+	if err != nil {
+		return
+	}
+	resp += status
+
+	resp += "</canceled>"
 	return
 }
 
@@ -773,6 +874,9 @@ func parseXML(req []byte) (results string) {
 								"parsed": cancel,
 							}).Info("Cancel")
 
+							resp_c, _ := cancel.handleCancel()
+							results += resp_c + "\n"
+
 						case "query":
 							var qry Query
 							err := decoder.DecodeElement(&qry, &se)
@@ -789,8 +893,8 @@ func parseXML(req []byte) (results string) {
 								"parsed": qry,
 							}).Info("Query")
 
-							resp, _ := qry.handleQuery()
-							results += resp + "\n"
+							resp_q, _ := qry.handleQuery()
+							results += resp_q + "\n"
 						default:
 
 						}
