@@ -84,7 +84,7 @@ func executeOrder(
 		return
 	}
 	// Update in Executed shares list
-	err = SharedModel().executedOrder(s_trId, -1 * sharesToExecute, limit_usd, exec_time)
+	err = SharedModel().executedOrder(s_trId, -1*sharesToExecute, limit_usd, exec_time)
 	if err != nil {
 		return
 	}
@@ -125,13 +125,12 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 	}
 
 	log.WithFields(log.Fields{
-		"transId": transId_str,
+		"transId":          transId_str,
 		"buy amount (USD)": order_amt * limit_f,
 		"balance":          bal_float,
 	}).Info("Funds")
 
-
-	err = SharedModel().createTransaction(transId_str, acctId, sym,order.Limit, order.Amount, time.Now())
+	err = SharedModel().createTransaction(transId_str, acctId, sym, order.Limit, order.Amount, time.Now())
 
 	if err != nil {
 		return
@@ -215,13 +214,13 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 	}
 
 	log.WithFields(log.Fields{
-		"transId": transId_str,
+		"transId":      transId_str,
 		"sell amount":  -1 * order_amt,
 		"shares owned": so_float,
 	}).Info("Holdings")
 
 	// set order details
-	err = SharedModel().createTransaction(transId_str, acctId, sym,order.Limit, order.Amount, time.Now())
+	err = SharedModel().createTransaction(transId_str, acctId, sym, order.Limit, order.Amount, time.Now())
 
 	if err != nil {
 		return
@@ -311,7 +310,7 @@ func getOrderStatus(trId string) (resp string, err error) {
 		"Transactions": transactions,
 	}).Info("Execution history")
 
-	if len(transactions) % 3 != 0 {
+	if len(transactions)%3 != 0 {
 		resp = ""
 		err = fmt.Errorf("Malformed Redis Data")
 		return
@@ -319,14 +318,14 @@ func getOrderStatus(trId string) (resp string, err error) {
 
 	len_trans := len(transactions) / 3
 	for i := 0; i < len_trans; i++ {
-		exec := ExecutedQueryResponse{Shares: transactions[3 * i], Price: transactions[3 * i + 1], Time: transactions[3 * i + 2]}
+		exec := ExecutedQueryResponse{Shares: transactions[3*i], Price: transactions[3*i+1], Time: transactions[3*i+2]}
 		if exec_string, err := xml.MarshalIndent(exec, "", "    "); err == nil {
 			resp += string(exec_string) + "\n"
 		}
 	}
 
 	remaining_amount, _ := strconv.ParseFloat(order_info[3], 64)
-	if (remaining_amount != 0 ) {
+	if remaining_amount != 0 {
 		open := OpenQueryResponse{Shares: order_info[3]}
 		if open_string, err := xml.MarshalIndent(open, "", "    "); err == nil {
 			resp += string(open_string) + "\n"
@@ -388,7 +387,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 	// "account", "symbol", "limit", "amount"
 	data, err := SharedModel().getTransaction(trId)
 	acct, sym, limit, amt := data[0], data[1], data[2], data[3]
-	if err != nil{
+	if err != nil {
 		return
 	}
 
@@ -402,43 +401,43 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 
 	if amt_f != 0 {
 
-	// remove from open orders sorted set
-	if buy {
-		err = SharedModel().closeOpenBuyOrder(trId, sym)
-	} else {
-		err = SharedModel().closeOpenSellOrder(trId, sym)
-	}
+		// remove from open orders sorted set
+		if buy {
+			err = SharedModel().closeOpenBuyOrder(trId, sym)
+		} else {
+			err = SharedModel().closeOpenSellOrder(trId, sym)
+		}
 
-	if err != nil {
-		return
-	}
+		if err != nil {
+			return
+		}
 
-	if buy { // add money back to account if buy order
-		limit_f, _ := strconv.ParseFloat(limit, 64)
-		SharedModel().addAccountBalance(acct, limit_f * amt_f)
+		if buy { // add money back to account if buy order
+			limit_f, _ := strconv.ParseFloat(limit, 64)
+			SharedModel().addAccountBalance(acct, limit_f*amt_f)
 
-	} else { // add shares back to account if sell order
-		SharedModel().addOrSetSharesToPosition(acct, sym, -1 * amt_f)
-	}
+		} else { // add shares back to account if sell order
+			SharedModel().addOrSetSharesToPosition(acct, sym, -1*amt_f)
+		}
 
-	// set remaining amount to 0
-	if buy {
-		err = SharedModel().updateBuyOrderAmount(trId, 0.0)
-	} else {
-		err = SharedModel().updateSellOrderAmount(trId, 0.0)
-	}
+		// set remaining amount to 0
+		if buy {
+			err = SharedModel().updateBuyOrderAmount(trId, 0.0)
+		} else {
+			err = SharedModel().updateSellOrderAmount(trId, 0.0)
+		}
 
-	if err != nil {
-		return
-	}
+		if err != nil {
+			return
+		}
 
-	// store info
-	exec_time := time.Now().String()
-	err = SharedModel().cancelOrder(trId, amt_f, exec_time)
-	if err != nil {
-		return
+		// store info
+		exec_time := time.Now().String()
+		err = SharedModel().cancelOrder(trId, amt_f, exec_time)
+		if err != nil {
+			return
+		}
 	}
-}
 
 	status, err := getOrderStatus(trId)
 	if err != nil {
@@ -506,7 +505,7 @@ func createSymbol(sym *Symbol) (err error) {
 		bal_float, err := SharedModel().getPositionAmount(rcv_acct.Id, sym.Sym)
 		if err != nil {
 			return err
-			}
+		}
 
 		log.WithFields(log.Fields{
 			"ID":       rcv_acct.Id,
@@ -734,7 +733,7 @@ func parseXML(req []byte) (results string) {
 			}
 
 			if inElement == "dump" {
-				// TODO: dump the database
+				outputDatabaseStateTruncated(50)
 				// store the output to the var "results"
 			}
 		default:
