@@ -294,35 +294,40 @@ func (m *Model) closeOpenSellOrder(uid string, sym string) (err error) {
 
 func (m *Model) getMaximumBuyOrder(symbol string, priceLimit float64) (uid []string, err error) {
 	// TODO: Get from redis
-	uid, err = redigo.Strings(redis.Zrange("open-buy:"+symbol, -1, -1, true))
-	if uid[0] != "" {
+	uid, err = redis.Zrange("open-buy:"+symbol, -1, -1, true)
+	if len(uid) > 0 && uid[0] != "" {
 		return
 	}
 
+	// TODO - Fix syntax error
+	/*
 	sqlQuery := fmt.Sprintf(`SELECT TOP 1 uid FROM buy_order WHERE price_limit=(SELECT MAX(price_limit) FROM buy_order WHERE symbol=%s)  AND price_limit >= %f`, symbol, priceLimit)
 	err = m.db.QueryRow(sqlQuery).Scan(&uid)
 	if err != nil {
 		log.Error("SQL Error: %s -- Query: %s", err, sqlQuery)
 		return
 	}
-	return uid, nil
+	*/
+	return
 
 }
 
 func (m *Model) getMinimumSellOrder(symbol string, priceLimit float64) (uid []string, err error) {
 	// TODO: Find in cache
-	uid, err = redigo.Strings(redis.Zrange("open-sell:"+symbol, 0, 0, true))
-	if uid[0] != "" {
+	uid, err = redis.Zrange("open-sell:"+symbol, 0, 0, true)
+	if len(uid) > 0 && uid[0] != "" {
 		return
 	}
 
+	// TODO - Fix syntax error
+	/*
 	// If must go to db
 	sqlQuery := fmt.Sprintf(`SELECT TOP 1 uid FROM sell_order WHERE price_limit=(SELECT MIN(price_limit) FROM sell_order WHERE symbol=%s)  AND price_limit <= %f`, symbol, priceLimit)
 	err = m.db.QueryRow(sqlQuery).Scan(&uid)
 	if err != nil {
 		return
-	}
-	return uid, nil
+	} */
+	return
 }
 
 /// Transactions
