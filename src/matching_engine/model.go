@@ -123,14 +123,15 @@ func (m *Model) createBuyOrder(uid string, accountID string, symbol string, amou
 }
 
 func (m *Model) updateBuyOrderAmount(uid string, newAmount float64) (err error) {
-	// TODO: Write to redis
 
-	sqlQuery := fmt.Sprintf(`UPDATE sell_order SET amount=%f WHERE uid = '%s'`, newAmount, uid)
+	err = redis.SetField("order:"+uid, "amount", newAmount)
+
+	sqlQuery := fmt.Sprintf(`UPDATE buy_order SET amount=%f WHERE uid = '%s'`, newAmount, uid)
 	m.submitQuery(sqlQuery)
-	return nil
+	return
 }
 
-// fills cancellation details 
+// fills cancellation details
 func (m *Model) cancelOrder(trId string, amt_f float64, time string) (err error) {
 	conn := redis.Pool.Get()
 	defer conn.Close()
@@ -170,11 +171,11 @@ func (m *Model) createSellOrder(uid string, accountID string, symbol string, amo
 }
 
 func (m *Model) updateSellOrderAmount(uid string, newAmount float64) (err error) {
-	// TODO: Write to redis
+	err = redis.SetField("order:"+uid, "amount", newAmount)
 
 	sqlQuery := fmt.Sprintf(`UPDATE sell_order SET amount=%f WHERE uid = '%s'`, newAmount, uid)
 	m.submitQuery(sqlQuery)
-	return err
+	return
 }
 
 func (m *Model) closeOpenSellOrder(uid string, sym string) (err error) {

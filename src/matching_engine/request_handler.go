@@ -162,7 +162,7 @@ func executeOrder(
 
 	conn := redis.Pool.Get()
 	exec_time := time.Now().String()
-	_, err = conn.Do("HSET", "order:"+s_trId, "amount", s_amt_f+sharesToExecute)
+	err = SharedModel().updateSellOrderAmount(s_trId, s_amt_f+sharesToExecute)
 
 	if err != nil {
 		return
@@ -172,7 +172,7 @@ func executeOrder(
 	if err != nil {
 		return
 	}
-	_, err = conn.Do("HSET", "order:"+b_trId, "amount", b_amt_f-sharesToExecute)
+	err = SharedModel().updateBuyOrderAmount(b_trId, b_amt_f-sharesToExecute)
 	if err != nil {
 		return
 	}
