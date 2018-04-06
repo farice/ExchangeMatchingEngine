@@ -391,19 +391,22 @@ func (q *Query) handleQuery() (resp string, err error) {
 
 func (c *Cancel) handleCancel() (resp string, err error) {
 	log.Info("handle cancel")
+	resp += "<canceled>\n"
+
 	trId := c.TransactionID
 	if trId == "" {
+		resp += "</canceled>"
 		err = fmt.Errorf("Invalid Query")
 		return
 	}
-	resp += "<canceled>\n"
+
 
 	match_mux.Lock()
 	defer match_mux.Unlock()
 
 	ex, _ := SharedModel().orderExists(trId)
 	if !ex {
-		resp = ""
+		resp += "</canceled>"
 		err = fmt.Errorf("Transaction does not exist")
 		return
 	}
@@ -412,6 +415,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 	data, err := SharedModel().getOrder(trId)
 	acct, sym, limit, amt := data[0], data[1], data[2], data[3]
 	if err != nil {
+		resp += "</canceled>"
 		return
 	}
 
@@ -422,6 +426,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 
 	if len(data) != 5 {
 		err = fmt.Errorf("Malformed redis data")
+		resp += "</canceled>"
 		return
 	}
 
@@ -438,6 +443,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 		}
 
 		if err != nil {
+			resp += "</canceled>"
 			return
 		}
 
@@ -457,6 +463,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 		}
 
 		if err != nil {
+			resp += "</canceled>"
 			return
 		}
 
@@ -464,12 +471,14 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 		exec_time := time.Now().String()
 		err = SharedModel().cancelOrder(trId, amt_f, exec_time)
 		if err != nil {
+			resp += "</canceled>"
 			return
 		}
 	}
 
 	status, err := getOrderStatus(trId)
 	if err != nil {
+		resp += "</canceled>"
 		return
 	}
 	resp += status
