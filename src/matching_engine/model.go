@@ -309,8 +309,7 @@ func (m *Model) addOrSetSharesToPosition(accountID string, symbol string, amount
 	ex, _ := redis.HExists("acct:"+accountID+":positions", symbol)
 
 	if ex {
-
-		_, err = redis.HIncrByFloat("acct:"+accountID+":positions", symbol, amount)
+		return m.addSharesToPosition(accountID, symbol, amount)
 	} else {
 		err = redis.SetField("acct:"+accountID+":positions", symbol, amount)
 	}
