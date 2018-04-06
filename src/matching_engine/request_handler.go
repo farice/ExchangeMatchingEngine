@@ -156,19 +156,27 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 	for {
 		members, err = SharedModel().getMinimumSellOrder(sym, limit_f)
 		if err != nil {
+			log.WithFields(log.Fields{
+				"err":      err,
+			}).Error("couldn't match")
 			return
 		}
+		log.WithFields(log.Fields{
+			"members": members,
+		}).Info("Found minimum sell order")
+
 		if len(members) > 0 {
 			// get information on this matched order...
-			// "account", "symbol", "limit", "amount"
+			// "account", "symbol", "limit", "amount", "origAmount"
 			data, _ := SharedModel().getOrder(members[0])
 
-			if len(data) != 5 {
-				log.WithFields(log.Fields{
-					"data":      data,
-					"len(data)": len(data),
-				}).Error("Corrupted data")
+			log.WithFields(log.Fields{
+				"fields": "\"account\", \"symbol\", \"limit\", \"amount\", \"origAmount\"",
+				"data":      data,
+				"len(data)": len(data),
+			}).Info("Matched Order Info")
 
+			if len(data) != 5 {
 				err = fmt.Errorf("Corrupted data: matched order info")
 				return
 			}
@@ -179,14 +187,17 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 				amountExecuted, err = executeOrder(false, transId_str, acctId, sym, order.Limit, order.Amount, members[0], data[0], data[1], data[2], data[3])
 				amountUnexecuted -= amountExecuted
 				if amountUnexecuted == 0 {
+					log.Error("Fully executed")
 					break getMin
 				}
 
 			} else {
+				log.Error("Price incompatible")
 				break getMin
 			}
 
 		} else {
+			log.Error("No minimum sells")
 			break getMin
 		}
 	}
@@ -255,15 +266,21 @@ getMax:
 			return
 		}
 
+		log.WithFields(log.Fields{
+			"members": members,
+		}).Info("Found maximum order")
+
 		if len(members) > 0 {
 			// get information on this matched order...
 			data, _ := SharedModel().getOrder(members[0])
 
+			log.WithFields(log.Fields{
+				"fields": "\"account\", \"symbol\", \"limit\", \"amount\", \"origAmount\"",
+				"data":      data,
+				"len(data)": len(data),
+			}).Info("Matched Order Info")
+
 			if len(data) != 5 {
-				log.WithFields(log.Fields{
-					"data":      data,
-					"len(data)": len(data),
-				}).Error("Corrupted data")
 				err = fmt.Errorf("Corrupted data: matched order info")
 				return
 			}
@@ -305,8 +322,8 @@ getMax:
 }
 
 func getOrderStatus(trId string) (resp string, err error) {
-    log.Info("Get order status")
-    ex, _ := SharedModel().orderExists(trId)
+	log.Info("Get order status")
+	ex, _ := SharedModel().transactionExists(trId)
 	if !ex {
 		resp = ""
 		err = fmt.Errorf("Transaction does not exist")
@@ -415,7 +432,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 	match_mux.Lock()
 	defer match_mux.Unlock()
 
-	ex, _ := SharedModel().orderExists(trId)
+	ex, _ := SharedModel().transactionExists(trId)
 	if !ex {
 		err = fmt.Errorf("Transaction does not exist")
 		resp += cancelQueryErrorMessage(trId, err.Error())

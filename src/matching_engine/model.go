@@ -18,7 +18,7 @@ import (
 const user = "postgres"
 const dbname = "exchange"
 const sslmode = "disable"
-const bufferCapacity = 1
+const bufferCapacity = 10
 
 // Singleton approach found here: http://marcio.io/2015/07/singleton-pattern-in-go/#comment-2132217074
 var initialized uint32
@@ -62,14 +62,13 @@ type Model struct {
 
 func (m *Model) incTransactionCounter() (ct int, err error) {
 	ct, err = redis.Incr("TransactionCounter")
-
-	// TODO(maybe) - postgres
 	return
 }
 
 /// Accounts
 
 func (m *Model) createAccount(uid string, balance string) (err error) {
+	LogMethodTimeElapsed("model.createAccount", time.Now())
 	// This creates a new account with the given unique ID and balance (in USD).
 	// The account has no positions. Attempting to create an account that already
 	// exists is an error.
@@ -106,19 +105,25 @@ func (m *Model) createAccount(uid string, balance string) (err error) {
 	}).Info("Created account")
 	// END TEST
 
-	balanceFloat, _ := strconv.ParseFloat(balance, 64)
+	balanceFloat, convErr := strconv.ParseFloat(balance, 64)
+	if convErr != nil {
+		log.Error("Failed conversion of string to float: ", convErr)
+		log.Error("String failed to convert: ", balance)
+	} else {
+		log.Infof("Converted string %s to float %f", balance, balanceFloat)
+	}
 	// postgres. Will reject if duplicate.
-	sqlQuery := fmt.Sprintf("INSERT INTO account(uid, balance) VALUES('%s', %f)", uid, balanceFloat)
+	sqlQuery := fmt.Sprintf(`INSERT INTO account(uid, balance) VALUES('%s', %f)`, uid, bal_float)
 	m.submitQuery(sqlQuery)
 	return
 }
 
 func (m *Model) getAccountBalance(accountID string) (balance float64, err error) {
+	LogMethodTimeElapsed("model.getAccountBalance", time.Now())
 	// Attempt fetch from redis
 	log.Info("Get account balance.")
 	bal, err := redis.GetField("acct:"+accountID, "balance")
 	if bal != nil && err == nil {
-		// TODO: Fix the error in the following line
 		balance, err = strconv.ParseFloat(string(bal.([]byte)), 64)
 		return balance, nil
 	}
@@ -147,7 +152,6 @@ func (m *Model) addAccountBalance(accountID string, amount float64) (err error) 
 			err = fmt.Errorf("Account does not exist")
 			return
 		}
-		// TODO: Add account to redis store
 		err = redis.SetField("acct:"+accountID, "balance", newBalance)
 		return
 	}
@@ -164,8 +168,19 @@ func (m *Model) addAccountBalance(accountID string, amount float64) (err error) 
 }
 
 func (m *Model) accountExists(accountID string) (ex bool, err error) {
+	log.Info("Account Exists")
 	ex, err = redis.Exists("acct:" + accountID)
-	// TODO - Postgres
+	if !ex {
+		sqlQuery := fmt.Sprintf(`SELECT * FROM account WHERE uid='%s'`, accountID)
+		var balance float64
+		sqlErr := m.db.QueryRow(sqlQuery).Scan(&balance)
+		if sqlErr == nil {
+			// Exists in DB
+			bal_string := strconv.FormatFloat(balance, 'E', -1, 64)
+			err = redis.SetField("acct:"+accountID, "balance", bal_string)
+			return true, nil
+		}
+	}
 
 	return
 }
@@ -173,6 +188,8 @@ func (m *Model) accountExists(accountID string) (ex bool, err error) {
 /// Open orders
 
 func (m *Model) createBuyOrder(uid string, accountID string, symbol string, amount float64, limit_str string, priceLimit float64) (err error) {
+
+	log.Info("Create Buy Order")
 
 	err = redis.Zadd("open-buy:"+symbol, limit_str, uid)
 
@@ -192,11 +209,19 @@ func (m *Model) updateBuyOrderAmount(uid string, newAmount float64) (err error) 
 
 // fills cancellation details
 func (m *Model) cancelOrder(trId string, amt_f float64, time string) (err error) {
+	log.Info("Cancel Order")
 	conn := redis.Pool.Get()
 	defer conn.Close()
 	_, err = conn.Do("HMSET", "order-cancel:"+trId, "amount", amt_f, "time", time)
 
-	// TODO - postgres
+	// Postgres removes the open order
+	var sqlQuery string
+	if amt_f > 0 {
+		sqlQuery = fmt.Sprintf(`DELETE FROM buy_order WHERE uid='%s'`, trId)
+	} else {
+		sqlQuery = fmt.Sprintf(`DELETE FROM sell_order WHERE uid='%s'`, trId)
+	}
+	m.submitQuery(sqlQuery)
 
 	return
 }
@@ -244,7 +269,7 @@ func getPartialExecutions(trId string) (transactions []string, err error) {
 }
 
 func (m *Model) closeOpenBuyOrder(uid string, sym string) (err error) {
-	// TODO: Get from redis
+	log.Info("Close open buy order")
 	conn := redis.Pool.Get()
 	defer conn.Close()
 	// num deleted
@@ -258,17 +283,16 @@ func (m *Model) closeOpenBuyOrder(uid string, sym string) (err error) {
 	}).Info("Removed open order from sorted set")
 
 	// If have to go to db
-	// TODO - Fix query (syntax error)
 	sqlQuery := fmt.Sprintf(`DELETE FROM buy_order WHERE uid='%s'`, uid)
-	sqlErr := m.db.QueryRow(sqlQuery).Scan()
-	if sqlErr != nil {
-		log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
-	}
+	m.submitQuery(sqlQuery)
+	// sqlErr := m.db.QueryRow(sqlQuery).Scan()
+	// if sqlErr != nil {
+	// 	log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
+	// }
 	return
 }
 
 func (m *Model) createSellOrder(uid string, accountID string, symbol string, amount float64, limit_str string, priceLimit float64) (err error) {
-	// TODO: Write to redis
 	err = redis.Zadd("open-sell:"+symbol, limit_str, uid)
 
 	sqlQuery := fmt.Sprintf(`INSERT INTO sell_order(uid, account_id, symbol, amount, price_limit) VALUES('%s', '%s', '%s', %f, %f);`, uid, accountID, symbol, amount, priceLimit)
@@ -285,6 +309,7 @@ func (m *Model) updateSellOrderAmount(uid string, newAmount float64) (err error)
 }
 
 func (m *Model) closeOpenSellOrder(uid string, sym string) (err error) {
+	log.Info("Close Open sell order")
 	conn := redis.Pool.Get()
 	defer conn.Close()
 	// num deleted
@@ -299,15 +324,15 @@ func (m *Model) closeOpenSellOrder(uid string, sym string) (err error) {
 
 	// If must go to db
 	sqlQuery := fmt.Sprintf(`DELETE FROM sell_order WHERE uid='%s'`, uid)
-	sqlErr := m.db.QueryRow(sqlQuery).Scan()
-	if sqlErr != nil {
-		log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
-	}
+	m.submitQuery(sqlQuery)
+	// sqlErr := m.db.QueryRow(sqlQuery).Scan()
+	// if sqlErr != nil {
+	// 	log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
+	// }
 	return
 }
 
 func (m *Model) getMaximumBuyOrder(symbol string, priceLimit float64) (uid []string, err error) {
-	// TODO: Get from redis
 	uid, err = redis.Zrange("open-buy:"+symbol, -1, -1, true)
 	if len(uid) > 0 && uid[0] != "" {
 		return
@@ -327,7 +352,7 @@ func (m *Model) getMaximumBuyOrder(symbol string, priceLimit float64) (uid []str
 }
 
 func (m *Model) getMinimumSellOrder(symbol string, priceLimit float64) (uid []string, err error) {
-	// TODO: Find in cache
+	log.Info("Get minimum sell order")
 	uid, err = redis.Zrange("open-sell:"+symbol, 0, 0, true)
 	if len(uid) > 0 && uid[0] != "" {
 		return
@@ -347,7 +372,7 @@ func (m *Model) getMinimumSellOrder(symbol string, priceLimit float64) (uid []st
 
 /// Orders
 
-func (m *Model) orderExists(transID string) (ex bool, err error) {
+func (m *Model) transactionExists(transID string) (ex bool, err error) {
 	ex, err = redis.Exists("order:" + transID)
 
 	if !ex {
@@ -361,15 +386,24 @@ func (m *Model) orderExists(transID string) (ex bool, err error) {
 		if sqlErr == nil {
 			return true, nil
 		}
+		sqlQuery = fmt.Sprintf(`SELECT * FROM transaction WHERE uid='%s'`, transID)
+		sqlErr = m.db.QueryRow(sqlQuery).Scan()
+		if sqlErr == nil {
+			return true, nil
+		}
 	}
 
 	return
 }
+
 func (m *Model) createOrder(transID string, acctID string, sym string, limit string, amount string, transactionTime time.Time) (err error) {
-	// TODO: Create in redis
+	log.Info("mode.createOrder")
+	LogMethodTimeElapsed("mode.createOrder", time.Now())
 	conn := redis.Pool.Get()
 	defer conn.Close()
 	_, err = conn.Do("HMSET", "order:"+transID, "account", acctID, "symbol", sym, "limit", limit, "amount", amount, "origAmount", amount)
+
+	// No need to create anything in postgres here.
 
 	// amountFloat, _ := strconv.ParseFloat(amount, 64)
 	// limitFloat, _ := strconv.ParseFloat(limit, 64)
@@ -387,7 +421,64 @@ func (m *Model) getOrder(orderID string) (data []string, err error) {
 	conn := redis.Pool.Get()
 	defer conn.Close()
 	data, err = redigo.Strings(conn.Do("HMGET", "order:"+orderID, "account", "symbol", "limit", "amount", "origAmount"))
-	// TODO - postgres
+
+	/*
+
+	// postgres
+	var uid string
+	var accountID string
+	var symbol string
+	limit := 0.0
+	var amount float64
+	// originalAmount := 0.0
+	var time string
+
+	sqlQuery := fmt.Sprintf(`SELECT * FROM sell_order WHERE uid='%s'`, orderID)
+	sqlErr := m.db.QueryRow(sqlQuery).Scan(&uid, &accountID, &symbol, &limit, &amount)
+	if sqlErr == nil {
+		limitString := strconv.FormatFloat(limit, 'E', -1, 64)
+		amountString := strconv.FormatFloat(amount, 'E', -1, 64)
+		// "account", "symbol", "limit", "amount", "origAmount"
+		data = []string{
+			accountID,
+			symbol,
+			limitString,
+			// TODO - Confirm that this is remaining amount
+			amountString,
+			// TODO - Need to retrieve original amount
+			amountString,
+		}
+		return data, err
+	}
+	sqlQuery = fmt.Sprintf(`SELECT * FROM buy_order WHERE uid='%s'`, orderID)
+	sqlErr = m.db.QueryRow(sqlQuery).Scan(&uid, &accountID, &symbol, &limit, &amount)
+	if sqlErr == nil {
+		limitString := strconv.FormatFloat(limit, 'E', -1, 64)
+		amountString := strconv.FormatFloat(amount, 'E', -1, 64)
+		data = []string{
+			uid,
+			accountID,
+			symbol,
+			limitString,
+			amountString,
+		}
+		return data, err
+	}
+	sqlQuery = fmt.Sprintf(`SELECT * FROM transaction WHERE uid='%s'`, orderID)
+	sqlErr = m.db.QueryRow(sqlQuery).Scan(&uid, &symbol, &amount, &limit, &time)
+	if sqlErr == nil {
+		limitString := strconv.FormatFloat(limit, 'E', -1, 64)
+		amountString := strconv.FormatFloat(amount, 'E', -1, 64)
+		data = []string{
+			uid,
+			accountID,
+			symbol,
+			limitString,
+			amountString,
+		}
+		return data, err
+	}
+	*/
 
 	return
 }

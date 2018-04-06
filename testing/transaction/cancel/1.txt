@@ -1,8 +1,8 @@
 148
 <?xml version="1.0" encoding="UTF-8"?>
 <transactions id="11">
- <query id="2"/>
- <cancel id="2"/>
- <query id="1"/>
- <cancel id="1"/>
+ <query id="6"/>
+ <cancel id="6"/>
+ <query id="5"/>
+ <cancel id="5"/>
 </transactions>
