@@ -30,6 +30,7 @@ func logAccount(acctId string) {
 func outputAccounts(rowLimit int) {
 	tableName := "account"
 	rows, err := SharedModel().db.Query(fmt.Sprintf("SELECT * FROM %s LIMIT %d", tableName, rowLimit))
+	println("QUERY: ", fmt.Sprintf("SELECT * FROM %s LIMIT %d", tableName, rowLimit))
 	if err != nil {
 		log.Info("Error attempting to print accounts: ", err)
 		return
