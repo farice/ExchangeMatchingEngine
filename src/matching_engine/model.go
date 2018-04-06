@@ -151,6 +151,14 @@ func (m *Model) addAccountBalance(accountID string, amount float64) (err error) 
 		return
 	}
 	redis.HIncrByFloat("acct:"+accountID, "balance", amount)
+
+	var newBalance float64
+	sqlQuery := fmt.Sprintf(`UPDATE account SET balance=balance+%f WHERE uid='%s' RETURNING balance`, amount, accountID)
+	sqlErr := m.db.QueryRow(sqlQuery).Scan(&newBalance)
+	if sqlErr != nil {
+		log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
+	}
+
 	return
 }
 
@@ -376,7 +384,6 @@ func (m *Model) getTransaction(trId string) (data []string, err error) {
 /// Symbols
 
 func (m *Model) createOrUpdateSymbol(symbol string) (err error) {
-	println("ANFKB_#RWJOQEWNDSFBJQ)TQEWJFDOSNKGALSDF)JAONSDFPASDJ)FANOSDFJ")
 	ex, _ := redis.Exists("sym:" + symbol)
 	if !ex {
 		redis.Set("sym:"+symbol, "")
@@ -390,23 +397,31 @@ func (m *Model) createOrUpdateSymbol(symbol string) (err error) {
 
 // Add shares to existing position or set shares to value if dne
 func (m *Model) addOrSetSharesToPosition(accountID string, symbol string, amount float64) (err error) {
-	println("@@@@@@@@ addOrSetSharesToPosition")
 	ex, _ := redis.HExists("acct:"+accountID+":positions", symbol)
 
 	if ex {
 		return m.addSharesToPosition(accountID, symbol, amount)
 	} else {
-		err = redis.SetField("acct:"+accountID+":positions", symbol, amount)
+		// Check if exists in postgres
+		fetchQuery := fmt.Sprintf(`SELECT amount FROM position WHERE account_id='%s' AND symbol='%s'`, accountID, symbol)
+		var currentAmount float64
+		currentAmount = amount
+		sqlErr := m.db.QueryRow(fetchQuery).Scan(&currentAmount)
+		err = redis.SetField("acct:"+accountID+":positions", symbol, currentAmount)
+		// If was in the db, still need to add the amount
+		if sqlErr == nil {
+			m.addSharesToPosition(accountID, symbol, amount)
+		} else {
+			// Create in DB
+			sqlQuery := fmt.Sprintf(`INSERT INTO position(account_id, symbol, amount) VALUES('%s', '%s', %f)`, accountID, symbol, amount)
+			m.submitQuery(sqlQuery)
+		}
 	}
-
-	// TODO - Postgres
 
 	return
 }
 
 func (m *Model) addSharesToPosition(accountID string, symbol string, amount float64) (err error) {
-	println("@@@@@@@@ addSharesToPosition")
-
 	_, err = redis.HIncrByFloat("acct:"+accountID+":positions", symbol, amount)
 
 	sqlQuery := fmt.Sprintf(`UPDATE position SET amount=amount+%f WHERE account_id = '%s' AND symbol='%s'`, amount, accountID, symbol)
@@ -415,27 +430,24 @@ func (m *Model) addSharesToPosition(accountID string, symbol string, amount floa
 	return
 }
 
-func (m *Model) updatePosition(accountID string, symbol string, amount float64) (err error) {
-	println("@@@@@@@@ updatePosition")
-	positionExists := false
-	fetchQuery := fmt.Sprintf(`SELECT amount FROM position WHERE account_id='%s' AND symbol='%s'`, accountID, symbol)
-	var currentAmount float64
-	err = m.db.QueryRow(fetchQuery).Scan(&currentAmount)
-	positionExists = err == nil
-	if !positionExists {
-		// TODO: Write to cache
-		sqlQuery := fmt.Sprintf(`INSERT INTO position(account_id, symbol, amount) VALUES('%s', '%s', %f)`, accountID, symbol, amount)
-		m.submitQuery(sqlQuery)
-		return nil
-	}
-	sqlQuery := fmt.Sprintf(`UPDATE position SET amount=%f WHERE account_id = '%s' AND symbol='%s'`, currentAmount+amount, accountID, symbol)
-	m.submitQuery(sqlQuery)
-	return nil
-}
+// func (m *Model) updatePosition(accountID string, symbol string, amount float64) (err error) {
+// 	positionExists := false
+// 	fetchQuery := fmt.Sprintf(`SELECT amount FROM position WHERE account_id='%s' AND symbol='%s'`, accountID, symbol)
+// 	var currentAmount float64
+// 	err = m.db.QueryRow(fetchQuery).Scan(&currentAmount)
+// 	positionExists = err == nil
+// 	if !positionExists {
+// 		// TODO: Write to cache
+// 		sqlQuery := fmt.Sprintf(`INSERT INTO position(account_id, symbol, amount) VALUES('%s', '%s', %f)`, accountID, symbol, amount)
+// 		m.submitQuery(sqlQuery)
+// 		return nil
+// 	}
+// 	sqlQuery := fmt.Sprintf(`UPDATE position SET amount=%f WHERE account_id = '%s' AND symbol='%s'`, currentAmount+amount, accountID, symbol)
+// 	m.submitQuery(sqlQuery)
+// 	return nil
+// }
 
 func (m *Model) removePosition(accountID string, symbol string) (err error) {
-	println("@@@@@@@@ removePosition")
-	// TODO: Update cache
 	sqlQuery := fmt.Sprintf(`DELETE FROM position WHERE account_id='%s' AND symbol='%s';`, accountID, symbol)
 	m.submitQuery(sqlQuery)
 	return nil
@@ -452,7 +464,7 @@ func (m *Model) getPositionAmount(accountID string, symbol string) (amount float
 		return
 	} else {
 		sqlQuery := fmt.Sprintf(`SELECT amount FROM position WHERE account_id='%s' AND symbol='%s';`, accountID, symbol)
-		println("QUERY: ", sqlQuery)
+		// println("QUERY: ", sqlQuery)
 		err = m.db.QueryRow(sqlQuery).Scan(&amount)
 
 		if err != nil {
@@ -486,6 +498,7 @@ func (m *Model) executeQueries() {
 	log.Info(fmt.Sprintf("Flushing SQL commands. There are %d commands in the buffer.", len(m.commands)))
 	for len(m.commands) > 0 {
 		s := <-m.commands
+		println("EXECUTING QUERY: ", s)
 		var query string
 		isDelete := strings.HasPrefix(s, "DELETE")
 		if isDelete {
