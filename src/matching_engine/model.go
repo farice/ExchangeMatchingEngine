@@ -255,6 +255,31 @@ func (m *Model) getSymbolSharesTotal(symbol string) (symbolExists bool, shares f
 
 /// Positions
 
+// Add shares to existing position or set shares to value if dne
+func (m *Model) addOrSetSharesToPosition(acctId string, sym string, amount float64) (err error) {
+	ex, _ := redis.HExists("acct:"+acctId+":positions", sym)
+
+	if ex {
+
+		_, err = redis.HIncrByFloat("acct:"+acctId+":positions", sym, amount)
+	} else {
+		err = redis.SetField("acct:"+acctId+":positions", sym, amount)
+	}
+
+	// TODO - Postgres
+
+	return
+}
+
+func (m *Model) addSharesToPosition(acctId string, sym string, amount float64) (err error) {
+
+	_, err = redis.HIncrByFloat("acct:"+acctId+":positions", sym, amount)
+
+	// TODO - Postgres
+
+	return
+}
+
 func (m *Model) updatePosition(accountID string, symbol string, amount float64) (err error) {
 	positionExists := false
 	fetchQuery := fmt.Sprintf(`SELECT amount FROM position WHERE account_id='%s' AND symbol='%s'`, accountID, symbol)

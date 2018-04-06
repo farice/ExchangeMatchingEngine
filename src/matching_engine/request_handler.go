@@ -145,7 +145,7 @@ func executeOrder(
 	}).Info("Matched open orders")
 
 	// add shares to buyer's account (don't worry about seller, they had shares removed when order opened)
-	addShares(b_acctId, sym, sharesToExecute)
+	SharedModel().addOrSetSharesToPosition(b_acctId, sym, sharesToExecute)
 	// add money to seller's account
 	err = SharedModel().addAccountBalance(s_acctId, sharesToExecute*limit_usd)
 	if err != nil {
@@ -193,17 +193,6 @@ func executeOrder(
 
 	return
 
-}
-
-func addShares(acctId string, sym string, amount float64) {
-	ex, _ := redis.HExists("acct:"+acctId+":positions", sym)
-
-	if ex {
-
-		redis.HIncrByFloat("acct:"+acctId+":positions", sym, amount)
-	} else {
-		redis.SetField("acct:"+acctId+":positions", sym, amount)
-	}
 }
 
 func (order *Order) handleBuy(acctId string, transId_str string, sym string, order_amt float64, limit_f float64) (err error) {
@@ -340,7 +329,7 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 	defer conn.Close()
 
 	// remove shares from user's account
-	redis.HIncrByFloat("acct:"+acctId+":positions", sym, order_amt)
+	SharedModel().addSharesToPosition(acctId, sym, order_amt)
 
 	var sharesRemaining = order_amt // shares left to sell (<= 0)
 
@@ -529,7 +518,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 		SharedModel().addAccountBalance(acct, limit_f * amt_f)
 
 	} else { // add shares back to account if sell order
-		addShares(acct, sym, -1 * amt_f)
+		SharedModel().addOrSetSharesToPosition(acct, sym, -1 * amt_f)
 	}
 
 	// set remaining amount to 0
@@ -640,14 +629,8 @@ func createSymbol(sym *Symbol) error {
 
 		} else {
 			// acct:ID:positions is a hashmap of all of the user's positions
-			ex, _ := redis.HExists("acct:"+rcv_acct.Id+":positions", sym.Sym)
-
-			if ex {
-				amt_float, _ := strconv.ParseFloat(rcv_acct.Amount, 64)
-				redis.HIncrByFloat("acct:"+rcv_acct.Id+":positions", sym.Sym, amt_float)
-			} else {
-				redis.SetField("acct:"+rcv_acct.Id+":positions", sym.Sym, rcv_acct.Amount)
-			}
+			amt_float, _ := strconv.ParseFloat(rcv_acct.Amount, 64)
+			SharedModel().addOrSetSharesToPosition(rcv_acct.Id, sym.Sym, amt_float)
 
 		}
 
