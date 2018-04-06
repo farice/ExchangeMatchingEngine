@@ -152,14 +152,14 @@ func (m *Model) closeOpenBuyOrder(uid string, sym string) (err error) {
 
 	log.WithFields(log.Fields{
 		"transId": uid,
-		"error": err,
+		"error":   err,
 		"deleted": num,
 	}).Info("Removed open order from sorted set")
 
 	// If have to go to db
 	// TODO - Fix query (syntax error)
-	//sqlQuery := fmt.Sprintf(`DELETE * from buy_order WHERE uid='%s'`, uid)
-	//err = m.db.QueryRow(sqlQuery).Scan()
+	sqlQuery := fmt.Sprintf(`DELETE FROM buy_order WHERE uid='%s'`, uid)
+	err = m.db.QueryRow(sqlQuery).Scan()
 	return
 }
 
@@ -187,14 +187,14 @@ func (m *Model) closeOpenSellOrder(uid string, sym string) (err error) {
 
 	log.WithFields(log.Fields{
 		"transId": uid,
-		"error": err,
+		"error":   err,
 		"deleted": num,
 	}).Info("Removed open order from sorted set")
 
 	// If must go to db
 	// TODO - Fix query (syntax error)
-	//sqlQuery := fmt.Sprintf(`DELETE * from sell_order WHERE uid='%s'`, uid)
-	//err = m.db.QueryRow(sqlQuery).Scan()
+	sqlQuery := fmt.Sprintf(`DELETE FROM sell_order WHERE uid='%s'`, uid)
+	err = m.db.QueryRow(sqlQuery).Scan()
 
 	return
 }
@@ -225,12 +225,11 @@ func (m *Model) getMinimumSellOrder(symbol string, priceLimit float64) (uid stri
 
 /// Transactions
 
-func (m *Model) createTransaction(transId string, acctId string, sym string, limit string, amount string, transactionTime time.Time) (err error){
+func (m *Model) createTransaction(transId string, acctId string, sym string, limit string, amount string, transactionTime time.Time) (err error) {
 	// TODO: Create in redis
 	conn := redis.Pool.Get()
 	defer conn.Close()
 	_, err = conn.Do("HMSET", "order:"+transId, "account", acctId, "symbol", sym, "limit", limit, "amount", amount, "origAmount", amount)
-
 
 	sqlQuery := fmt.Sprintf(`INSERT INTO transaction(symbol, amount, price, transaction_time VALUES('%s', %f, %f, %v)`, sym, amount, limit, transactionTime)
 	m.submitQuery(sqlQuery)
