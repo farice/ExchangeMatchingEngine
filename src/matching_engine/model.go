@@ -372,43 +372,14 @@ func (m *Model) getTransaction(trId string) (data []string, err error) {
 
 /// Symbols
 
-func (m *Model) createOrUpdateSymbol(symbol string, shares float64) (err error) {
+func (m *Model) createOrUpdateSymbol(symbol string) (err error) {
 	ex, _ := redis.Exists("sym:" + symbol)
 	if !ex {
 		redis.Set("sym:"+symbol, "")
-	}
-
-	// TODO - What is shares total? We don't need this kind of info
-	// TODO - Just need to store whether symbol exists, feel free to delete most of below
-	exists, totalShares, err := m.getSymbolSharesTotal(symbol)
-	if !exists {
-		// TODO: Set amount in redis
-		// redis.Set("sym:"+sym.Sym, "")
-		if err != nil {
-			return err
-		}
-		sqlQuery := fmt.Sprintf(`INSERT INTO symbol(name, shares) VALUES('%s', %f);`, symbol, totalShares+shares)
-		m.submitQuery(sqlQuery)
-	} else {
-		// Update amount
-		sqlQuery := fmt.Sprintf("UPDATE symbol SET shares=%f WHERE name='%s'", shares, symbol)
+		sqlQuery := fmt.Sprintf(`INSERT INTO symbol(name) VALUES('%s');`, symbol)
 		m.submitQuery(sqlQuery)
 	}
-	return nil
-}
-
-func (m *Model) getSymbolSharesTotal(symbol string) (symbolExists bool, shares float64, err error) {
-	// TODO: Check redis
-	// ex, _ := redis.Exists("sym:" + sym.Sym)
-
-	// If need to ask postgres
-	sqlQuery := fmt.Sprintf(`SELECT shares FROM symbol WHERE name='%s';`, symbol)
-	err = m.db.QueryRow(sqlQuery).Scan(&shares)
-	if err != nil {
-		log.Error("SQL Error: %s -- Query: %s", err, sqlQuery)
-		return false, 0, err
-	}
-	return true, shares, nil
+	return
 }
 
 /// Positions
