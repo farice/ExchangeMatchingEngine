@@ -519,7 +519,12 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 	}
 
 	// set remaining amount to 0
-	_, err = conn.Do("HSET", "order:"+trId, "amount", 0.0)
+	if buy {
+		err = SharedModel().updateBuyOrderAmount(trId, 0.0)
+	} else {
+		err = SharedModel().updateSellOrderAmount(trId, 0.0)
+	}
+	
 	if err != nil {
 		return
 	}
