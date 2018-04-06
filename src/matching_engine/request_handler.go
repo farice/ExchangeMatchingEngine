@@ -130,7 +130,7 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 		"balance":          bal_float,
 	}).Info("Funds")
 
-	err = SharedModel().createTransaction(transId_str, acctId, sym, order.Limit, order.Amount, time.Now())
+	err = SharedModel().createOrder(transId_str, acctId, sym, order.Limit, order.Amount, time.Now())
 
 	if err != nil {
 		return
@@ -152,7 +152,7 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 		if len(members) > 0 {
 			// get information on this matched order...
 			// "account", "symbol", "limit", "amount"
-			data, _ := SharedModel().getTransaction(members[0])
+			data, _ := SharedModel().getOrder(members[0])
 
 			if len(data) != 5 {
 				log.WithFields(log.Fields{
@@ -220,7 +220,7 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 	}).Info("Holdings")
 
 	// set order details
-	err = SharedModel().createTransaction(transId_str, acctId, sym, order.Limit, order.Amount, time.Now())
+	err = SharedModel().createOrder(transId_str, acctId, sym, order.Limit, order.Amount, time.Now())
 
 	if err != nil {
 		return
@@ -245,7 +245,7 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 
 		if len(members) > 0 {
 			// get information on this matched order...
-			data, _ := SharedModel().getTransaction(members[0])
+			data, _ := SharedModel().getOrder(members[0])
 
 			if len(data) != 5 {
 				log.WithFields(log.Fields{
@@ -292,7 +292,7 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 }
 
 func getOrderStatus(trId string) (resp string, err error) {
-	ex, _ := SharedModel().transactionExists(trId)
+	ex, _ := SharedModel().orderExists(trId)
 	if !ex {
 		resp = ""
 		err = fmt.Errorf("Transaction does not exist")
@@ -300,7 +300,7 @@ func getOrderStatus(trId string) (resp string, err error) {
 	}
 
 	// "account", "symbol", "limit", "amount", "origAmount"
-	order_info, _ := SharedModel().getTransaction(trId)
+	order_info, _ := SharedModel().getOrder(trId)
 	log.WithFields(log.Fields{
 		"order info: [acct, sym, lim, amt, o_amt]": order_info,
 	}).Info("Status transaction")
@@ -383,7 +383,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 	match_mux.Lock()
 	defer match_mux.Unlock()
 
-	ex, _ := SharedModel().transactionExists(trId)
+	ex, _ := SharedModel().orderExists(trId)
 	if !ex {
 		resp = ""
 		err = fmt.Errorf("Transaction does not exist")
@@ -391,7 +391,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 	}
 
 	// "account", "symbol", "limit", "amount"
-	data, err := SharedModel().getTransaction(trId)
+	data, err := SharedModel().getOrder(trId)
 	acct, sym, limit, amt := data[0], data[1], data[2], data[3]
 	if err != nil {
 		return

@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS symbol (
     name varchar PRIMARY KEY
 );
 CREATE TABLE IF NOT EXISTS transaction (
+    uid varchar PRIMARY KEY,
     symbol varchar,
     amount float,
     price float,

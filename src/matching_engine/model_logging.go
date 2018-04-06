@@ -57,7 +57,6 @@ func outputPositions(rowLimit int) {
 	var amount float64
 
 	sqlQuery := fmt.Sprintf("SELECT * FROM %s LIMIT %d", tableName, rowLimit)
-	println("QUERY: ", sqlQuery)
 	rows, err := SharedModel().db.Query(sqlQuery)
 	if err != nil {
 		log.Info("Error attempting to print positions: ", err)
@@ -113,6 +112,7 @@ func outputSellOrders(rowLimit int) {
 
 func outputTransactions(rowLimit int) {
 	tableName := "transaction"
+	var uid string
 	var symbol string
 	var amount float64
 	var price float64
@@ -125,7 +125,7 @@ func outputTransactions(rowLimit int) {
 	}
 	println("\n#######  TRANSACTIONS: ")
 	for rows.Next() {
-		err = rows.Scan(&symbol, &amount, &price, &transactionTime)
-		println(fmt.Sprintf("Symbol: %s -- Amount: %f -- Price: %s -- TransactionTime: %v", &symbol, &amount, &price, &transactionTime))
+		err = rows.Scan(&uid, &symbol, &amount, &price, &transactionTime)
+		println(fmt.Sprintf("UID: %s -- Symbol: %s -- Amount: %f -- Price: %f -- TransactionTime: %v", uid, symbol, amount, price, transactionTime))
 	}
 }

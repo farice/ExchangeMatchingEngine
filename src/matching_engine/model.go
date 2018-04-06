@@ -344,36 +344,48 @@ func (m *Model) getMinimumSellOrder(symbol string, priceLimit float64) (uid []st
 	return
 }
 
-/// Transactions
+/// Orders
 
-func (m *Model) transactionExists(transId string) (ex bool, err error) {
-	ex, err = redis.Exists("order:" + transId)
+func (m *Model) orderExists(transID string) (ex bool, err error) {
+	ex, err = redis.Exists("order:" + transID)
 
-	// TODO - postgres
+	if !ex {
+		sqlQuery := fmt.Sprintf(`SELECT * FROM sell_order WHERE uid='%s'`, transID)
+		sqlErr := m.db.QueryRow(sqlQuery).Scan()
+		if sqlErr == nil {
+			return true, nil
+		}
+		sqlQuery = fmt.Sprintf(`SELECT * FROM buy_order WHERE uid='%s'`, transID)
+		sqlErr = m.db.QueryRow(sqlQuery).Scan()
+		if sqlErr == nil {
+			return true, nil
+		}
+	}
 
 	return
 }
-func (m *Model) createTransaction(transId string, acctId string, sym string, limit string, amount string, transactionTime time.Time) (err error) {
+func (m *Model) createOrder(transID string, acctID string, sym string, limit string, amount string, transactionTime time.Time) (err error) {
 	// TODO: Create in redis
 	conn := redis.Pool.Get()
 	defer conn.Close()
-	_, err = conn.Do("HMSET", "order:"+transId, "account", acctId, "symbol", sym, "limit", limit, "amount", amount, "origAmount", amount)
+	_, err = conn.Do("HMSET", "order:"+transID, "account", acctID, "symbol", sym, "limit", limit, "amount", amount, "origAmount", amount)
 
-	amountFloat, _ := strconv.ParseFloat(amount, 64)
-	limitFloat, _ := strconv.ParseFloat(limit, 64)
+	// amountFloat, _ := strconv.ParseFloat(amount, 64)
+	// limitFloat, _ := strconv.ParseFloat(limit, 64)
 
-	formattedTime := transactionTime.String()
+	// formattedTime := transactionTime.String()
 
-	sqlQuery := fmt.Sprintf(`INSERT INTO transaction(symbol, amount, price, transaction_time) VALUES('%s', %f, %f, '%s')`, sym, amountFloat, limitFloat, formattedTime)
-	m.submitQuery(sqlQuery)
+	// sqlQuery := fmt.Sprintf(`INSERT INTO transaction(uid, symbol, amount, price, transaction_time) VALUES('%s', '%s', %f, %f, '%s')`, transID, sym, amountFloat, limitFloat, formattedTime)
+	// m.submitQuery(sqlQuery)
 
 	return
 }
 
-func (m *Model) getTransaction(trId string) (data []string, err error) {
+// Get order or closed transaction.
+func (m *Model) getOrder(orderID string) (data []string, err error) {
 	conn := redis.Pool.Get()
 	defer conn.Close()
-	data, err = redigo.Strings(conn.Do("HMGET", "order:"+trId, "account", "symbol", "limit", "amount", "origAmount"))
+	data, err = redigo.Strings(conn.Do("HMGET", "order:"+orderID, "account", "symbol", "limit", "amount", "origAmount"))
 	// TODO - postgres
 
 	return
@@ -399,21 +411,20 @@ func (m *Model) addOrSetSharesToPosition(accountID string, symbol string, amount
 
 	if ex {
 		return m.addSharesToPosition(accountID, symbol, amount)
+	}
+	// Check if exists in postgres
+	fetchQuery := fmt.Sprintf(`SELECT amount FROM position WHERE account_id='%s' AND symbol='%s'`, accountID, symbol)
+	var currentAmount float64
+	currentAmount = amount
+	sqlErr := m.db.QueryRow(fetchQuery).Scan(&currentAmount)
+	err = redis.SetField("acct:"+accountID+":positions", symbol, currentAmount)
+	// If was in the db, still need to add the amount
+	if sqlErr == nil {
+		m.addSharesToPosition(accountID, symbol, amount)
 	} else {
-		// Check if exists in postgres
-		fetchQuery := fmt.Sprintf(`SELECT amount FROM position WHERE account_id='%s' AND symbol='%s'`, accountID, symbol)
-		var currentAmount float64
-		currentAmount = amount
-		sqlErr := m.db.QueryRow(fetchQuery).Scan(&currentAmount)
-		err = redis.SetField("acct:"+accountID+":positions", symbol, currentAmount)
-		// If was in the db, still need to add the amount
-		if sqlErr == nil {
-			m.addSharesToPosition(accountID, symbol, amount)
-		} else {
-			// Create in DB
-			sqlQuery := fmt.Sprintf(`INSERT INTO position(account_id, symbol, amount) VALUES('%s', '%s', %f)`, accountID, symbol, amount)
-			m.submitQuery(sqlQuery)
-		}
+		// Create in DB
+		sqlQuery := fmt.Sprintf(`INSERT INTO position(account_id, symbol, amount) VALUES('%s', '%s', %f)`, accountID, symbol, amount)
+		m.submitQuery(sqlQuery)
 	}
 
 	return
