@@ -106,8 +106,8 @@ func (m *Model) createAccount(uid string, balance string) (err error) {
 	}).Info("Created account")
 	// END TEST
 
-	// postgres
-	sqlQuery := fmt.Sprintf("INSERT INTO account(uid, balance) VALUES('%s', %f)", uid, balance)
+	// postgres. Will reject if duplicate.
+	sqlQuery := fmt.Sprintf("INSERT INTO account(uid, balance) VALUES('%s', %f)", uid, bal_float)
 	m.submitQuery(sqlQuery)
 
 	return
@@ -310,12 +310,12 @@ func (m *Model) getMaximumBuyOrder(symbol string, priceLimit float64) (uid []str
 
 	// TODO - Fix syntax error
 	/*
-	sqlQuery := fmt.Sprintf(`SELECT TOP 1 uid FROM buy_order WHERE price_limit=(SELECT MAX(price_limit) FROM buy_order WHERE symbol=%s)  AND price_limit >= %f`, symbol, priceLimit)
-	err = m.db.QueryRow(sqlQuery).Scan(&uid)
-	if err != nil {
-		log.Error("SQL Error: %s -- Query: %s", err, sqlQuery)
-		return
-	}
+		sqlQuery := fmt.Sprintf(`SELECT TOP 1 uid FROM buy_order WHERE price_limit=(SELECT MAX(price_limit) FROM buy_order WHERE symbol=%s)  AND price_limit >= %f`, symbol, priceLimit)
+		err = m.db.QueryRow(sqlQuery).Scan(&uid)
+		if err != nil {
+			log.Error("SQL Error: %s -- Query: %s", err, sqlQuery)
+			return
+		}
 	*/
 	return
 
@@ -330,13 +330,13 @@ func (m *Model) getMinimumSellOrder(symbol string, priceLimit float64) (uid []st
 
 	// TODO - Fix syntax error
 	/*
-	// If must go to db
-	sqlQuery := fmt.Sprintf(`SELECT TOP 1 uid FROM sell_order WHERE price_limit=(SELECT MIN(price_limit) FROM sell_order WHERE symbol=%s)  AND price_limit <= %f`, symbol, priceLimit)
-	err = m.db.QueryRow(sqlQuery).Scan(&uid)
-	if err != nil {
-		log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
-		return
-	} */
+		// If must go to db
+		sqlQuery := fmt.Sprintf(`SELECT TOP 1 uid FROM sell_order WHERE price_limit=(SELECT MIN(price_limit) FROM sell_order WHERE symbol=%s)  AND price_limit <= %f`, symbol, priceLimit)
+		err = m.db.QueryRow(sqlQuery).Scan(&uid)
+		if err != nil {
+			log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
+			return
+		} */
 	return
 }
 
