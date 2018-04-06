@@ -8,5 +8,3 @@
 - Break times by arrival time
 - Use `removed` flag for deleted cache entries, for the sake of coherence
 
-**Bugs:**
-- createOrUpdateSymbol() only re-creates symbols; does not add balance to existing symbols.

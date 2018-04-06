@@ -39,6 +39,10 @@ func executeOrder(
 		return
 	}
 
+	log.Info("Execute order")
+	logAccount(b_acctId)
+	logAccount(s_acctId)
+
 	sym := b_sym
 	var limit_usd float64
 	if matchAtBuyPrice {
@@ -106,11 +110,15 @@ func executeOrder(
 		err = SharedModel().closeOpenBuyOrder(b_trId, sym)
 	}
 
+	logAccount(b_acctId)
+	logAccount(s_acctId)
+
 	return
 
 }
 
 func (order *Order) handleBuy(acctId string, transId_str string, sym string, order_amt float64, limit_f float64) (err error) {
+	log.Info("Handle buy")
 	// check if user has enough USD in their account
 	var bal_float float64
 	// bal_float, err = getAccountBalance(acctId)
@@ -129,6 +137,8 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 		"buy amount (USD)": order_amt * limit_f,
 		"balance":          bal_float,
 	}).Info("Funds")
+
+	logAccount(acctId)
 
 	err = SharedModel().createTransaction(transId_str, acctId, sym, order.Limit, order.Amount, time.Now())
 
@@ -197,11 +207,12 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 		SharedModel().addAccountBalance(acctId, -1*amountUnexecuted*limit_f)
 	}
 
+	logAccount(acctId)
 	return
 }
 
 func (order *Order) handleSell(acctId string, transId_str string, sym string, order_amt float64, limit_f float64) (err error) {
-
+	log.Info("handle sell")
 	// check if user has enough of SYM in their account
 	so_float, err := SharedModel().getPositionAmount(acctId, sym)
 	if err != nil {
@@ -218,6 +229,7 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 		"sell amount":  -1 * order_amt,
 		"shares owned": so_float,
 	}).Info("Holdings")
+	logAccount(acctId)
 
 	// set order details
 	err = SharedModel().createTransaction(transId_str, acctId, sym, order.Limit, order.Amount, time.Now())
@@ -287,11 +299,13 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 		}
 
 	}
+	logAccount(acctId)
 
 	return
 }
 
 func getOrderStatus(trId string) (resp string, err error) {
+	log.Info("Get order status")
 	ex, _ := SharedModel().transactionExists(trId)
 	if !ex {
 		resp = ""
@@ -341,10 +355,13 @@ func getOrderStatus(trId string) (resp string, err error) {
 		}
 	}
 
+	logAccount(order_info[0])
+
 	return
 }
 
 func (q *Query) handleQuery() (resp string, err error) {
+	log.Info("handle query")
 	resp += "<status>\n"
 
 	trId := q.TransactionID
@@ -373,6 +390,7 @@ func (q *Query) handleQuery() (resp string, err error) {
 }
 
 func (c *Cancel) handleCancel() (resp string, err error) {
+	log.Info("handle cancel")
 	trId := c.TransactionID
 	if trId == "" {
 		err = fmt.Errorf("Invalid Query")
@@ -396,6 +414,11 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 	if err != nil {
 		return
 	}
+
+	log.WithFields(log.Fields{
+		"order info: [acct, sym, lim, amt, o_amt]": data,
+	}).Info("Cancelling order")
+	logAccount(acct)
 
 	if len(data) != 5 {
 		err = fmt.Errorf("Malformed redis data")
@@ -452,11 +475,13 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 	resp += status
 
 	resp += "</canceled>"
+
+	logAccount(acct)
 	return
 }
 
 func (order *Order) openOrder(acctId string) (transId int, err error) {
-	log.Info("Creating order...")
+	log.Info("Open order")
 	transId = IncAndGet()
 	transId_str := strconv.Itoa(transId)
 	sym := order.Sym
@@ -478,11 +503,13 @@ func (order *Order) openOrder(acctId string) (transId int, err error) {
 }
 
 func (acct *Account) createAccount() (err error) {
+	log.Info("Create account")
 	err = SharedModel().createAccount(acct.Id, acct.Balance)
 	return err
 }
 
 func createSymbol(sym *Symbol) (err error) {
+	log.Info("Create symbol")
 	// This creates the specified symbol. The symbol tag can have one or more
 	//children which are <account id="ID">NUM</account> These indicate that
 	// NUM shares of the symbol being created should be placed into the account
