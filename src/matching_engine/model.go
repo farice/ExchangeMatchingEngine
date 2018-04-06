@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/farice/EME/redis"
+	redigo "github.com/gomodule/redigo/redis"
 	_ "github.com/lib/pq"
 	log "github.com/sirupsen/logrus"
 )
@@ -106,10 +107,10 @@ func (m *Model) addAccountBalance(accountID string, amount float64) (err error) 
 		err = m.db.QueryRow(fmt.Sprintf(`UPDATE symbol SET balance=%f WHERE uid='%s'`, currentAmount+amount, accountID)).Scan()
 		// TODO: Add account to redis store
 
-		return nil
+		return
 	}
 	redis.HIncrByFloat("acct:"+accountID, "balance", amount)
-	return nil
+	return
 }
 
 /// Open orders
@@ -129,13 +130,25 @@ func (m *Model) updateBuyOrderAmount(uid string, newAmount float64) (err error) 
 	return nil
 }
 
-func (m *Model) cancelBuyOrder(uid string, accountID string) (err error) {
+func (m *Model) closeOpenBuyOrder(uid string, sym string) (err error) {
 	// TODO: Get from redis
+	conn := redis.Pool.Get()
+	defer conn.Close()
+	// num deleted
+	var num int
+	num, err = redigo.Int(conn.Do("ZREM", "open-buy:"+sym, uid))
+
+	log.WithFields(log.Fields{
+		"transId": uid,
+		"error": err,
+		"deleted": num,
+	}).Info("Removed open order from sorted set")
 
 	// If have to go to db
-	sqlQuery := fmt.Sprintf(`DELETE * from buy_order WHERE uid='%s'`, uid)
-	err = m.db.QueryRow(sqlQuery).Scan()
-	return err
+	// TODO - Fix query (syntax error)
+	//sqlQuery := fmt.Sprintf(`DELETE * from buy_order WHERE uid='%s'`, uid)
+	//err = m.db.QueryRow(sqlQuery).Scan()
+	return
 }
 
 func (m *Model) createSellOrder(uid string, accountID string, symbol string, amount float64, priceLimit float64) (err error) {
@@ -153,12 +166,24 @@ func (m *Model) updateSellOrderAmount(uid string, newAmount float64) (err error)
 	return err
 }
 
-func (m *Model) cancelSellOrder(uid string, accountID string) (err error) {
-	// TODO: Find in cache
+func (m *Model) closeOpenSellOrder(uid string, sym string) (err error) {
+	conn := redis.Pool.Get()
+	defer conn.Close()
+	// num deleted
+	var num int
+	num, err = redigo.Int(conn.Do("ZREM", "open-sell:"+sym, uid))
+
+	log.WithFields(log.Fields{
+		"transId": uid,
+		"error": err,
+		"deleted": num,
+	}).Info("Removed open order from sorted set")
 
 	// If must go to db
-	sqlQuery := fmt.Sprintf(`DELETE * from sell_order WHERE uid='%s'`, uid)
-	err = m.db.QueryRow(sqlQuery).Scan()
+	// TODO - Fix query (syntax error)
+	//sqlQuery := fmt.Sprintf(`DELETE * from sell_order WHERE uid='%s'`, uid)
+	//err = m.db.QueryRow(sqlQuery).Scan()
+
 	return
 }
 

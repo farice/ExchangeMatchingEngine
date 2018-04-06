@@ -147,14 +147,14 @@ func executeOrder(
 	// add shares to buyer's account (don't worry about seller, they had shares removed when order opened)
 	addShares(b_acctId, sym, sharesToExecute)
 	// add money to seller's account
-	err = addAccountBalance(s_acctId, sharesToExecute*limit_usd)
+	err = SharedModel().addAccountBalance(s_acctId, sharesToExecute*limit_usd)
 	if err != nil {
 		return
 	}
 
 	// remove money from buyer because money wasn't removed yet at order open
 	if !matchAtBuyPrice {
-		err = addAccountBalance(b_acctId, -1*sharesToExecute*limit_usd)
+		err = SharedModel().addAccountBalance(b_acctId, -1*sharesToExecute*limit_usd)
 		if err != nil {
 			return
 		}
@@ -184,57 +184,15 @@ func executeOrder(
 	conn.Close()
 
 	if s_amt_f+sharesToExecute == 0 {
-		closeOpenOrder(false, sym, s_trId)
+		err = SharedModel().closeOpenSellOrder(s_trId, sym)
 	}
 
 	if b_amt_f-sharesToExecute == 0 {
-		closeOpenOrder(true, sym, b_trId)
+		err = SharedModel().closeOpenBuyOrder(b_trId, sym)
 	}
 
 	return
 
-}
-
-func closeOpenOrder(buy bool, sym string, transId string) (err error) {
-	conn := redis.Pool.Get()
-	defer conn.Close()
-	if buy {
-		_, err = conn.Do("ZREM", "open-buy:"+sym, transId)
-	} else {
-		_, err = conn.Do("ZREM", "open-sell:"+sym, transId)
-	}
-
-	log.WithFields(log.Fields{
-		"transId": transId,
-		"error": err,
-	}).Info("Removed open order from sorted set")
-
-	return
-
-}
-
-// func getAccountBalance(acctId string) (bal_f float64, err error) {
-// 	bal, _ := redis.GetField("acct:"+acctId, "balance")
-// 	if bal == nil {
-// 		// If a user balance is nil, it does not exist
-// 		err = fmt.Errorf("User %s does not exist", acctId)
-// 		return
-// 	}
-// 	bal_f, _ = strconv.ParseFloat(string(bal.([]byte)), 64)
-
-// 	return
-// }
-
-func addAccountBalance(acctId string, amount float64) (err error) {
-	ex, _ := redis.HExists("acct:"+acctId, "balance")
-	if ex == false {
-		// If a user balance is nil, it does not exist
-		err = fmt.Errorf("User %s does not exist", acctId)
-		return
-	}
-
-	redis.HIncrByFloat("acct:"+acctId, "balance", amount)
-	return
 }
 
 func addShares(acctId string, sym string, amount float64) {
@@ -335,7 +293,7 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 		}
 
 		// remove funds from account, because not all was matched immediately
-		addAccountBalance(acctId, -1*amountUnexecuted*limit_f)
+		SharedModel().addAccountBalance(acctId, -1*amountUnexecuted*limit_f)
 	}
 
 	return
@@ -556,14 +514,19 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 	if amt_f != 0 {
 
 	// remove from open orders sorted set
-	err = closeOpenOrder(buy, sym, trId)
+	if buy {
+		err = SharedModel().closeOpenBuyOrder(trId, sym)
+	} else {
+		err = SharedModel().closeOpenSellOrder(trId, sym)
+	}
+
 	if err != nil {
 		return
 	}
 
 	if buy { // add money back to account if buy order
 		limit_f, _ := strconv.ParseFloat(limit, 64)
-		addAccountBalance(acct, limit_f * amt_f)
+		SharedModel().addAccountBalance(acct, limit_f * amt_f)
 
 	} else { // add shares back to account if sell order
 		addShares(acct, sym, -1 * amt_f)
