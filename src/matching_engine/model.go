@@ -472,7 +472,7 @@ func (m *Model) getPositionAmount(accountID string, symbol string) (amount float
 		err = m.db.QueryRow(sqlQuery).Scan(&amount)
 
 		if err != nil {
-			// err = fmt.Errorf("User owns no shares of %s", symbol)
+			err = fmt.Errorf("User owns no shares of %s", symbol)
 			log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
 			return
 		}
