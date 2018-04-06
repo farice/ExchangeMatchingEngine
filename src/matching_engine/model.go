@@ -250,8 +250,8 @@ func (m *Model) closeOpenBuyOrder(uid string, sym string) (err error) {
 	// If have to go to db
 	// TODO - Fix query (syntax error)
 	sqlQuery := fmt.Sprintf(`DELETE FROM buy_order WHERE uid='%s'`, uid)
-	err = m.db.QueryRow(sqlQuery).Scan()
-	if err != nil {
+	sql_err := m.db.QueryRow(sqlQuery).Scan()
+	if sql_err != nil {
 		log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
 	}
 	return
@@ -289,8 +289,8 @@ func (m *Model) closeOpenSellOrder(uid string, sym string) (err error) {
 
 	// If must go to db
 	sqlQuery := fmt.Sprintf(`DELETE FROM sell_order WHERE uid='%s'`, uid)
-	err = m.db.QueryRow(sqlQuery).Scan()
-	if err != nil {
+	sql_err := m.db.QueryRow(sqlQuery).Scan()
+	if sql_err != nil {
 		log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
 	}
 	return
