@@ -136,22 +136,17 @@ func (m *Model) getAccountBalance(accountID string) (balance float64, err error)
 func (m *Model) addAccountBalance(accountID string, amount float64) (err error) {
 	ex, _ := redis.HExists("acct:"+accountID, "balance")
 	if ex == false {
-		// Should return err if cannot find row.
-		var currentAmount float64
-		sqlQuery := fmt.Sprintf(`GET balance FROM account WHERE uid='%s'`, accountID)
-		err = m.db.QueryRow(sqlQuery).Scan(&currentAmount)
-		// If user does not exist
+		// If not in cache
+		var newBalance float64
+		sqlQuery := fmt.Sprintf(`UPDATE account SET balance=balance+%f WHERE uid='%s' RETURNING balance`, amount, accountID)
+		err = m.db.QueryRow(sqlQuery).Scan(&newBalance)
 		if err != nil {
+			// Likely non-existent account
 			log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
 			return err
 		}
-		sqlQuery = fmt.Sprintf(`UPDATE symbol SET balance=%f WHERE uid='%s'`, currentAmount+amount, accountID)
-		err = m.db.QueryRow(sqlQuery).Scan()
-		if err != nil {
-			log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
-		}
 		// TODO: Add account to redis store
-
+		err = redis.SetField("acct:"+accountID, "balance", newBalance)
 		return
 	}
 	redis.HIncrByFloat("acct:"+accountID, "balance", amount)
