@@ -106,7 +106,6 @@ func (m *Model) createAccount(uid string, balance string) (err error) {
 	}).Info("Created account")
 	// END TEST
 
-
 	// postgres
 	sqlQuery := fmt.Sprintf("INSERT INTO account(uid, balance) VALUES('%s', %f)", uid, balance)
 	m.submitQuery(sqlQuery)
@@ -287,7 +286,6 @@ func (m *Model) closeOpenSellOrder(uid string, sym string) (err error) {
 	}).Info("Removed open order from sorted set")
 
 	// If must go to db
-	// TODO - Fix query (syntax error)
 	sqlQuery := fmt.Sprintf(`DELETE FROM sell_order WHERE uid='%s'`, uid)
 	err = m.db.QueryRow(sqlQuery).Scan()
 
@@ -304,7 +302,8 @@ func (m *Model) getMaximumBuyOrder(symbol string, priceLimit float64) (uid []str
 	sqlQuery := fmt.Sprintf(`SELECT TOP 1 uid FROM buy_order WHERE price_limit=(SELECT MAX(price_limit) FROM buy_order WHERE symbol=%s)  AND price_limit >= %f`, symbol, priceLimit)
 	err = m.db.QueryRow(sqlQuery).Scan(&uid)
 	if err != nil {
-		return
+		log.Error("SQL Error: %s -- Query: %s", err, sqlQuery)
+		return "", err
 	}
 	return uid, nil
 
@@ -339,7 +338,7 @@ func (m *Model) createTransaction(transId string, acctId string, sym string, lim
 	// TODO: Create in redis
 	conn := redis.Pool.Get()
 	defer conn.Close()
-	_, err = conn.Do("HMSET", "order:"+transId, "account", acctId, "symbol", sym, "limit", limit, "amount", amount, "origAmount", amount)
+	_, err = conn.Do("HMSET", "order:"+transId, "account", accountID, "symbol", sym, "limit", limit, "amount", amount, "origAmount", amount)
 
 	sqlQuery := fmt.Sprintf(`INSERT INTO transaction(symbol, amount, price, transaction_time VALUES('%s', %f, %f, %v)`, sym, amount, limit, transactionTime)
 	m.submitQuery(sqlQuery)
@@ -391,6 +390,7 @@ func (m *Model) getSymbolSharesTotal(symbol string) (symbolExists bool, shares f
 	sqlQuery := fmt.Sprintf(`SELECT shares FROM symbol WHERE name='%s';`, symbol)
 	err = m.db.QueryRow(sqlQuery).Scan(&shares)
 	if err != nil {
+		log.Error("SQL Error: %s -- Query: %s", err, sqlQuery)
 		return false, 0, err
 	}
 	return true, shares, nil
@@ -399,14 +399,13 @@ func (m *Model) getSymbolSharesTotal(symbol string) (symbolExists bool, shares f
 /// Positions
 
 // Add shares to existing position or set shares to value if dne
-func (m *Model) addOrSetSharesToPosition(acctId string, sym string, amount float64) (err error) {
-	ex, _ := redis.HExists("acct:"+acctId+":positions", sym)
+func (m *Model) addOrSetSharesToPosition(accountID string, symbol string, amount float64) (err error) {
+	ex, _ := redis.HExists("acct:"+accountID+":positions", symbol)
 
 	if ex {
-
-		_, err = redis.HIncrByFloat("acct:"+acctId+":positions", sym, amount)
+		return m.addSharesToPosition(accountID, symbol, amount)
 	} else {
-		err = redis.SetField("acct:"+acctId+":positions", sym, amount)
+		err = redis.SetField("acct:"+accountID+":positions", symbol, amount)
 	}
 
 	// TODO - Postgres
@@ -414,11 +413,12 @@ func (m *Model) addOrSetSharesToPosition(acctId string, sym string, amount float
 	return
 }
 
-func (m *Model) addSharesToPosition(acctId string, sym string, amount float64) (err error) {
+func (m *Model) addSharesToPosition(accountID string, symbol string, amount float64) (err error) {
 
-	_, err = redis.HIncrByFloat("acct:"+acctId+":positions", sym, amount)
+	_, err = redis.HIncrByFloat("acct:"+accountID+":positions", symbol, amount)
 
-	// TODO - Postgres
+	sqlQuery := fmt.Sprintf(`UPDATE position SET amount=amount+%f WHERE account_id = '%s' AND symbol='%s'`, amount, accountID, symbol)
+	m.submitQuery(sqlQuery)
 
 	return
 }
@@ -505,7 +505,7 @@ func (m *Model) executeQueries() {
 		// listener := pq.NewListener()
 		_, err := m.db.Exec(s)
 		if err != nil {
-			log.Error("SQL database error: ", err)
+			log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, s))
 		}
 		if isDelete {
 			// Dispatch to other thread?
