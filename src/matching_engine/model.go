@@ -353,10 +353,27 @@ func (m *Model) removePosition(accountID string, symbol string) (err error) {
 }
 
 func (m *Model) getPositionAmount(accountID string, symbol string) (amount float64, err error) {
-	sqlQuery := fmt.Sprintf(`SELECT amount FROM position WHERE account_id='%s' AND symbol='%s';`, accountID, symbol)
-	println("QUERY: ", sqlQuery)
-	err = m.db.QueryRow(sqlQuery).Scan(&amount)
-	return amount, err
+	var bal interface{}
+	bal, err = redis.GetField("acct:"+accountID+":positions", symbol)
+	if err != nil {
+		return
+	}
+	if bal != nil {
+		amount, err = strconv.ParseFloat(string(bal.([]byte)), 64)
+		return
+	} else {
+		sqlQuery := fmt.Sprintf(`SELECT amount FROM position WHERE account_id='%s' AND symbol='%s';`, accountID, symbol)
+		println("QUERY: ", sqlQuery)
+		err = m.db.QueryRow(sqlQuery).Scan(&amount)
+
+		if err != nil {
+			err = fmt.Errorf("User owns no shares of %s", symbol)
+			return
+		}
+	}
+
+	return
+
 }
 
 /// Implementation / private

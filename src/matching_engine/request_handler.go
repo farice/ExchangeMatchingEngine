@@ -209,16 +209,10 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 func (order *Order) handleSell(acctId string, transId_str string, sym string, order_amt float64, limit_f float64) (err error) {
 
 	// check if user has enough of SYM in their account
-	var shares_owned interface{}
-	shares_owned, err = redis.GetField("acct:"+acctId+":positions", sym)
+	so_float, err := SharedModel().getPositionAmount(acctId, sym)
 	if err != nil {
 		return
 	}
-	if shares_owned == nil {
-		err = fmt.Errorf("User owns no shares of %s", sym)
-		return
-	}
-	so_float, _ := strconv.ParseFloat(string(shares_owned.([]byte)), 64)
 
 	if -1*order_amt > so_float {
 		err = fmt.Errorf("Insufficient funds")
@@ -522,8 +516,11 @@ func createSymbol(sym *Symbol) error {
 		}
 
 		// TEST: - Retrieve key + field, then log
-		bal, _ := redis.GetField("acct:"+rcv_acct.Id+":positions", sym.Sym)
-		bal_float, _ := strconv.ParseFloat(string(bal.([]byte)), 64)
+		bal_float, err := SharedModel().getPositionAmount(rcv_acct.Id, sym.Sym)
+		if err != nil {
+			return err
+			}
+
 		log.WithFields(log.Fields{
 			"ID":       rcv_acct.Id,
 			"Position": bal_float,
