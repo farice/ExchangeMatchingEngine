@@ -526,7 +526,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 
 	// store info
 	exec_time := time.Now().String()
-	_, err = conn.Do("HMSET", "order-cancel:"+trId, "amount", amt_f, "time", exec_time)
+	err = SharedModel().cancelOrder(trId, amt_f, exec_time)
 	if err != nil {
 		return
 	}

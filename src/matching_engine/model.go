@@ -130,6 +130,17 @@ func (m *Model) updateBuyOrderAmount(uid string, newAmount float64) (err error) 
 	return nil
 }
 
+// fills cancellation details 
+func (m *Model) cancelOrder(trId string, amt_f float64, time string) (err error) {
+	conn := redis.Pool.Get()
+	defer conn.Close()
+	_, err = conn.Do("HMSET", "order-cancel:"+trId, "amount", amt_f, "time", time)
+
+	// TODO - postgres
+
+	return
+}
+
 func (m *Model) closeOpenBuyOrder(uid string, sym string) (err error) {
 	// TODO: Get from redis
 	conn := redis.Pool.Get()
