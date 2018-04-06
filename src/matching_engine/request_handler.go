@@ -325,9 +325,9 @@ func getOrderStatus(trId string) (resp string, err error) {
 		}
 	}
 
-	remaining_amount, _ := strconv.ParseFloat(order_info[0], 64)
+	remaining_amount, _ := strconv.ParseFloat(order_info[3], 64)
 	if (remaining_amount != 0 ) {
-		open := OpenQueryResponse{Shares: order_info[0]}
+		open := OpenQueryResponse{Shares: order_info[3]}
 		if open_string, err := xml.MarshalIndent(open, "", "    "); err == nil {
 			resp += string(open_string) + "\n"
 		}
