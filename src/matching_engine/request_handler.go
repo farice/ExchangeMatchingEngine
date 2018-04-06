@@ -1,4 +1,4 @@
-	package main
+package main
 
 import (
 	"bytes"
@@ -138,9 +138,7 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 		"balance":          bal_float,
 	}).Info("Funds")
 
-	logAccount(acctId)
-
-	err = SharedModel().createTransaction(transId_str, acctId, sym, order.Limit, order.Amount, time.Now())
+	err = SharedModel().createOrder(transId_str, acctId, sym, order.Limit, order.Amount, time.Now())
 
 	if err != nil {
 		return
@@ -154,7 +152,6 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 	var amountUnexecuted = order_amt
 
 	// loop until there are no more orders to execute
-loopMin:
 	for {
 		members, err = SharedModel().getMinimumSellOrder(sym, limit_f)
 		if err != nil {
@@ -163,7 +160,7 @@ loopMin:
 		if len(members) > 0 {
 			// get information on this matched order...
 			// "account", "symbol", "limit", "amount"
-			data, _ := SharedModel().getTransaction(members[0])
+			data, _ := SharedModel().getOrder(members[0])
 
 			if len(data) != 5 {
 				log.WithFields(log.Fields{
@@ -181,15 +178,15 @@ loopMin:
 				amountExecuted, err = executeOrder(false, transId_str, acctId, sym, order.Limit, order.Amount, members[0], data[0], data[1], data[2], data[3])
 				amountUnexecuted -= amountExecuted
 				if amountUnexecuted == 0 {
-					break loopMin
+					break
 				}
 
 			} else {
-				break loopMin
+				break
 			}
 
 		} else {
-			break loopMin
+			break
 		}
 	}
 
@@ -233,7 +230,7 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 	logAccount(acctId)
 
 	// set order details
-	err = SharedModel().createTransaction(transId_str, acctId, sym, order.Limit, order.Amount, time.Now())
+	err = SharedModel().createOrder(transId_str, acctId, sym, order.Limit, order.Amount, time.Now())
 
 	if err != nil {
 		return
@@ -248,7 +245,6 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 
 	var sharesRemaining = order_amt // shares left to sell (<= 0)
 
-loopMax:
 	for {
 
 		// find highest open buy order
@@ -259,7 +255,7 @@ loopMax:
 
 		if len(members) > 0 {
 			// get information on this matched order...
-			data, _ := SharedModel().getTransaction(members[0])
+			data, _ := SharedModel().getOrder(members[0])
 
 			if len(data) != 5 {
 				log.WithFields(log.Fields{
@@ -278,13 +274,13 @@ loopMax:
 				amountExecuted, err = executeOrder(true, members[0], data[0], data[1], data[2], data[3], transId_str, acctId, sym, order.Limit, order.Amount)
 				sharesRemaining += amountExecuted
 				if sharesRemaining == 0 {
-					break loopMax
+					break
 				}
 			} else {
-				break loopMax
+				break
 			}
 		} else {
-			break loopMax
+			break
 		}
 	}
 
@@ -307,8 +303,8 @@ loopMax:
 }
 
 func getOrderStatus(trId string) (resp string, err error) {
-	log.Info("Get order status")
-	ex, _ := SharedModel().transactionExists(trId)
+    log.Info("Get order status")
+    ex, _ := SharedModel().orderExists(trId)
 	if !ex {
 		resp = ""
 		err = fmt.Errorf("Transaction does not exist")
@@ -316,7 +312,7 @@ func getOrderStatus(trId string) (resp string, err error) {
 	}
 
 	// "account", "symbol", "limit", "amount", "origAmount"
-	order_info, _ := SharedModel().getTransaction(trId)
+	order_info, _ := SharedModel().getOrder(trId)
 	log.WithFields(log.Fields{
 		"order info: [acct, sym, lim, amt, o_amt]": order_info,
 	}).Info("Status transaction")
@@ -403,7 +399,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 	match_mux.Lock()
 	defer match_mux.Unlock()
 
-	ex, _ := SharedModel().transactionExists(trId)
+	ex, _ := SharedModel().orderExists(trId)
 	if !ex {
 		resp = ""
 		err = fmt.Errorf("Transaction does not exist")
@@ -411,7 +407,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 	}
 
 	// "account", "symbol", "limit", "amount"
-	data, err := SharedModel().getTransaction(trId)
+	data, err := SharedModel().getOrder(trId)
 	acct, sym, limit, amt := data[0], data[1], data[2], data[3]
 	if err != nil {
 		return
