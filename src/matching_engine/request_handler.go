@@ -239,7 +239,7 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 	for {
 
 		// find highest open buy order
-		members, err = SharedModel().getMaximumBuyOrder(sym)
+		members, err = SharedModel().getMaximumBuyOrder(sym, limit_f)
 		if err != nil {
 			return
 		}
@@ -282,7 +282,7 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 	// more shares to sell, still
 	if sharesRemaining < 0 {
 		// No matches, add to open sell sorted set
-		err = SharedModel().createSellOrder(transId_str, acctId, sym, sharesRemaining, limit_f)
+		err = SharedModel().createSellOrder(transId_str, acctId, sym, sharesRemaining, order.Limit, limit_f)
 		if err != nil {
 			return
 		}
@@ -334,7 +334,7 @@ func getOrderStatus(trId string) (resp string, err error) {
 	} else { // may have been cancelled!
 		ex, _ := SharedModel().orderCancelled(trId)
 		if ex {
-			cancel_info := getCancelledOrderDetails(trId)
+			cancel_info, _ := SharedModel().getCancelledOrderDetails(trId)
 			cancel := CancelQueryResponse{Shares: cancel_info[0], Time: cancel_info[1]}
 			if cancel_string, err := xml.MarshalIndent(cancel, "", "    "); err == nil {
 				resp += string(cancel_string) + "\n"
@@ -378,7 +378,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 	match_mux.Lock()
 	defer match_mux.Unlock()
 
-	ex, _ := SharedModel().transactionsExists(trId)
+	ex, _ := SharedModel().transactionExists(trId)
 	if !ex {
 		resp = ""
 		err = fmt.Errorf("Transaction does not exist")
@@ -484,10 +484,10 @@ func createSymbol(sym *Symbol) (err error) {
 	// with the given ID. Note that this creation is legal even if sym already
 	// exists: in such a case, it is used to create more shares of that symbol
 	//and add them to existing accounts.
-	SharedModel().createOrUpdateSymbol(sym.Sym)
+	SharedModel().createOrUpdateSymbol(sym.Sym, 0.0)
 
 	for _, rcv_acct := range sym.Accounts {
-		ex := SharedModel().accountExists(rcv_acct.Id)
+		ex, _ := SharedModel().accountExists(rcv_acct.Id)
 		if !ex {
 			// TODO:- Handle error, account does not exist
 			log.WithFields(log.Fields{

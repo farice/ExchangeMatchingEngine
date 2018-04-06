@@ -194,8 +194,8 @@ func (m *Model) cancelOrder(trId string, amt_f float64, time string) (err error)
 
 
 // is order cancelled
-func (m *Model) orderCancelled(trId string) (ex bool) {
-	ex, _ = redis.Exists("order-cancel:"+trId)
+func (m *Model) orderCancelled(trId string) (ex bool, err error) {
+	ex, err = redis.Exists("order-cancel:"+trId)
 	// TODO - postgres
 
 	return
@@ -256,9 +256,9 @@ func (m *Model) closeOpenBuyOrder(uid string, sym string) (err error) {
 	return
 }
 
-func (m *Model) createSellOrder(uid string, accountID string, symbol string, amount float64, priceLimit float64) (err error) {
+func (m *Model) createSellOrder(uid string, accountID string, symbol string, amount float64, limit_str string, priceLimit float64) (err error) {
 	// TODO: Write to redis
-	err = redis.Zadd("open-sell:"+symbol, priceLimit, uid)
+	err = redis.Zadd("open-sell:"+symbol,limit_str, uid)
 
 	sqlQuery := fmt.Sprintf(`INSERT INTO sell_order(uid, account_id, symbol, amount, price_limit) VALUES('%s', '%s', '%s', %f, %f);`, uid, accountID, symbol, amount, priceLimit)
 	m.submitQuery(sqlQuery)
@@ -304,7 +304,7 @@ func (m *Model) getMaximumBuyOrder(symbol string, priceLimit float64) (uid []str
 	sqlQuery := fmt.Sprintf(`SELECT TOP 1 uid FROM buy_order WHERE price_limit=(SELECT MAX(price_limit) FROM buy_order WHERE symbol=%s)  AND price_limit >= %f`, symbol, priceLimit)
 	err = m.db.QueryRow(sqlQuery).Scan(&uid)
 	if err != nil {
-		return "", err
+		return
 	}
 	return uid, nil
 
@@ -321,15 +321,15 @@ func (m *Model) getMinimumSellOrder(symbol string, priceLimit float64) (uid []st
 	sqlQuery := fmt.Sprintf(`SELECT TOP 1 uid FROM sell_order WHERE price_limit=(SELECT MIN(price_limit) FROM sell_order WHERE symbol=%s)  AND price_limit <= %f`, symbol, priceLimit)
 	err = m.db.QueryRow(sqlQuery).Scan(&uid)
 	if err != nil {
-		return "", err
+		return
 	}
 	return uid, nil
 }
 
 /// Transactions
 
-func (m *Model) transactionExists(transId string) (ex bool) {
-	ex = redis.Exists("order:"+transId)
+func (m *Model) transactionExists(transId string) (ex bool, err error) {
+	ex, err = redis.Exists("order:"+transId)
 
 	// TODO - postgres
 
@@ -361,7 +361,7 @@ func (m *Model) getTransaction(trId string) (data []string, err error) {
 func (m *Model) createOrUpdateSymbol(symbol string, shares float64) (err error) {
 	ex, _ := redis.Exists("sym:" + symbol)
 	if !ex {
-		redis.Set("sym:"+sym.Sym, "")
+		redis.Set("sym:"+symbol, "")
 	}
 
 	// TODO - What is shares total? We don't need this kind of info
