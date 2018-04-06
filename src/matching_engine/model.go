@@ -140,6 +140,7 @@ func (m *Model) getAccountBalance(accountID string) (balance float64, err error)
 }
 
 func (m *Model) addAccountBalance(accountID string, amount float64) (err error) {
+	defer LogMethodTimeElapsed("model.addAccountBalance", time.Now())
 	ex, _ := redis.HExists("acct:"+accountID, "balance")
 	if ex == false {
 		// If not in cache
@@ -168,6 +169,7 @@ func (m *Model) addAccountBalance(accountID string, amount float64) (err error) 
 }
 
 func (m *Model) accountExists(accountID string) (ex bool, err error) {
+	defer LogMethodTimeElapsed("model.accountExists", time.Now())
 	log.Info("Account Exists")
 	ex, err = redis.Exists("acct:" + accountID)
 	if !ex {
@@ -188,7 +190,7 @@ func (m *Model) accountExists(accountID string) (ex bool, err error) {
 /// Open orders
 
 func (m *Model) createBuyOrder(uid string, accountID string, symbol string, amount float64, limit_str string, priceLimit float64) (err error) {
-
+	defer LogMethodTimeElapsed("model.createBuyOrder", time.Now())
 	log.Info("Create Buy Order")
 
 	err = redis.Zadd("open-buy:"+symbol, limit_str, uid)
@@ -199,6 +201,7 @@ func (m *Model) createBuyOrder(uid string, accountID string, symbol string, amou
 }
 
 func (m *Model) updateBuyOrderAmount(uid string, newAmount float64) (err error) {
+	defer LogMethodTimeElapsed("model.updateBuyOrderAmount", time.Now())
 
 	err = redis.SetField("order:"+uid, "amount", newAmount)
 
@@ -209,6 +212,7 @@ func (m *Model) updateBuyOrderAmount(uid string, newAmount float64) (err error) 
 
 // fills cancellation details
 func (m *Model) cancelOrder(trId string, amt_f float64, time string) (err error) {
+	defer LogMethodTimeElapsed("model.cancelOrder", time.Now())
 	log.Info("Cancel Order")
 	conn := redis.Pool.Get()
 	defer conn.Close()
@@ -269,6 +273,7 @@ func getPartialExecutions(trId string) (transactions []string, err error) {
 }
 
 func (m *Model) closeOpenBuyOrder(uid string, sym string) (err error) {
+	defer LogMethodTimeElapsed("model.closeOpenBuyOrder", time.Now())
 	log.Info("Close open buy order")
 	conn := redis.Pool.Get()
 	defer conn.Close()
@@ -293,6 +298,7 @@ func (m *Model) closeOpenBuyOrder(uid string, sym string) (err error) {
 }
 
 func (m *Model) createSellOrder(uid string, accountID string, symbol string, amount float64, limit_str string, priceLimit float64) (err error) {
+	defer LogMethodTimeElapsed("model.createSellOrder", time.Now())
 	err = redis.Zadd("open-sell:"+symbol, limit_str, uid)
 
 	sqlQuery := fmt.Sprintf(`INSERT INTO sell_order(uid, account_id, symbol, amount, price_limit) VALUES('%s', '%s', '%s', %f, %f);`, uid, accountID, symbol, amount, priceLimit)
@@ -301,6 +307,7 @@ func (m *Model) createSellOrder(uid string, accountID string, symbol string, amo
 }
 
 func (m *Model) updateSellOrderAmount(uid string, newAmount float64) (err error) {
+	defer LogMethodTimeElapsed("model.updateSellOrderAmount", time.Now())
 	err = redis.SetField("order:"+uid, "amount", newAmount)
 
 	sqlQuery := fmt.Sprintf(`UPDATE sell_order SET amount=%f WHERE uid = '%s'`, newAmount, uid)
@@ -309,6 +316,7 @@ func (m *Model) updateSellOrderAmount(uid string, newAmount float64) (err error)
 }
 
 func (m *Model) closeOpenSellOrder(uid string, sym string) (err error) {
+	defer LogMethodTimeElapsed("model.closeOpenSellOrder", time.Now())
 	log.Info("Close Open sell order")
 	conn := redis.Pool.Get()
 	defer conn.Close()
@@ -333,6 +341,7 @@ func (m *Model) closeOpenSellOrder(uid string, sym string) (err error) {
 }
 
 func (m *Model) getMaximumBuyOrder(symbol string, priceLimit float64) (uid []string, err error) {
+	defer LogMethodTimeElapsed("model.getMaximumBuyOrder", time.Now())
 	uid, err = redis.Zrange("open-buy:"+symbol, -1, -1, true)
 	if len(uid) > 0 && uid[0] != "" {
 		return
@@ -352,6 +361,7 @@ func (m *Model) getMaximumBuyOrder(symbol string, priceLimit float64) (uid []str
 }
 
 func (m *Model) getMinimumSellOrder(symbol string, priceLimit float64) (uid []string, err error) {
+	defer LogMethodTimeElapsed("model.getMinimumSellOrder", time.Now())
 	log.Info("Get minimum sell order")
 	uid, err = redis.Zrange("open-sell:"+symbol, 0, 0, true)
 	if len(uid) > 0 && uid[0] != "" {
@@ -418,6 +428,7 @@ func (m *Model) createOrder(transID string, acctID string, sym string, limit str
 
 // Get order or closed transaction.
 func (m *Model) getOrder(orderID string) (data []string, err error) {
+	defer LogMethodTimeElapsed("model.getOrder", time.Now())
 	conn := redis.Pool.Get()
 	defer conn.Close()
 	data, err = redigo.Strings(conn.Do("HMGET", "order:"+orderID, "account", "symbol", "limit", "amount", "origAmount"))
@@ -486,6 +497,7 @@ func (m *Model) getOrder(orderID string) (data []string, err error) {
 /// Symbols
 
 func (m *Model) createOrUpdateSymbol(symbol string) (err error) {
+	defer LogMethodTimeElapsed("model.createOrUpdateSymbol", time.Now())
 	ex, _ := redis.Exists("sym:" + symbol)
 	if !ex {
 		redis.Set("sym:"+symbol, "")
@@ -499,6 +511,7 @@ func (m *Model) createOrUpdateSymbol(symbol string) (err error) {
 
 // Add shares to existing position or set shares to value if dne
 func (m *Model) addOrSetSharesToPosition(accountID string, symbol string, amount float64) (err error) {
+	defer LogMethodTimeElapsed("model.addOrSetSharesToPosition", time.Now())
 	ex, _ := redis.HExists("acct:"+accountID+":positions", symbol)
 
 	if ex {
@@ -523,6 +536,7 @@ func (m *Model) addOrSetSharesToPosition(accountID string, symbol string, amount
 }
 
 func (m *Model) addSharesToPosition(accountID string, symbol string, amount float64) (err error) {
+	defer LogMethodTimeElapsed("model.addSharesToPosition", time.Now())
 	_, err = redis.HIncrByFloat("acct:"+accountID+":positions", symbol, amount)
 
 	sqlQuery := fmt.Sprintf(`UPDATE position SET amount=amount+%f WHERE account_id = '%s' AND symbol='%s'`, amount, accountID, symbol)
@@ -549,12 +563,14 @@ func (m *Model) addSharesToPosition(accountID string, symbol string, amount floa
 // }
 
 func (m *Model) removePosition(accountID string, symbol string) (err error) {
+	defer LogMethodTimeElapsed("model.removePosition", time.Now())
 	sqlQuery := fmt.Sprintf(`DELETE FROM position WHERE account_id='%s' AND symbol='%s';`, accountID, symbol)
 	m.submitQuery(sqlQuery)
 	return nil
 }
 
 func (m *Model) getPositionAmount(accountID string, symbol string) (amount float64, err error) {
+	defer LogMethodTimeElapsed("model.getPositionAmount", time.Now())
 	var bal interface{}
 	bal, err = redis.GetField("acct:"+accountID+":positions", symbol)
 	if err != nil {
