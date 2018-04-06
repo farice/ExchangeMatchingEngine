@@ -548,6 +548,8 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 	amt_f, _ := strconv.ParseFloat(amt, 64)
 	buy := (amt_f > 0)
 
+	if amt_f != 0 {
+		
 	// remove from open orders sorted set
 	if buy {
 		_, err = conn.Do("ZREM", "open-buy:"+sym, trId)
@@ -581,6 +583,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 	if err != nil {
 		return
 	}
+}
 
 	status, err := getOrderStatus(trId)
 	if err != nil {
