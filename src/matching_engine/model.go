@@ -104,10 +104,16 @@ func (m *Model) createAccount(uid string, balance string) (err error) {
 	}).Info("Created account")
 	// END TEST
 
-	balanceFloat, _ := strconv.ParseFloat(balance, 64)
+	balanceFloat, convErr := strconv.ParseFloat(balance, 64)
+	if convErr != nil {
+		log.Error("Failed conversion of string to float: ", convErr)
+		log.Error("String failed to convert: ", balance)
+	} else {
+		log.Infof("Converted string %s to float %f", balance, balanceFloat)
+	}
 	// postgres. Will reject if duplicate.
-	sqlQuery := fmt.Sprintf("INSERT INTO account(uid, balance) VALUES('%s', %f)", uid, balanceFloat)
-	m.submitQuery(sqlQuery)
+	// sqlQuery := fmt.Sprintf(`INSERT INTO account(uid, balance) VALUES('%s', %f)`, uid, bal_float)
+	// m.submitQuery(sqlQuery)
 	return
 }
 
@@ -161,7 +167,7 @@ func (m *Model) addAccountBalance(accountID string, amount float64) (err error) 
 func (m *Model) accountExists(accountID string) (ex bool, err error) {
 	ex, err = redis.Exists("acct:" + accountID)
 	if !ex {
-		sqlQuery := fmt.Sprintf("SELECT * FROM account WHERE uid='%s'", accountID)
+		sqlQuery := fmt.Sprintf(`SELECT * FROM account WHERE uid='%s'`, accountID)
 		var balance float64
 		sqlErr := m.db.QueryRow(sqlQuery).Scan(&balance)
 		if sqlErr == nil {
