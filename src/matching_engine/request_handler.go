@@ -215,9 +215,8 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 		"balance":          bal_float,
 	}).Info("Funds")
 
-	var conn = redis.Pool.Get()
-	_, err = conn.Do("HMSET", "order:"+transId_str, "account", acctId, "symbol", sym, "limit", order.Limit, "amount", order.Amount, "origAmount", order.Amount)
-	conn.Close()
+
+	err = SharedModel().createTransaction(transId_str, acctId, sym,order.Limit, order.Amount, time.Now())
 
 	if err != nil {
 		return
@@ -227,7 +226,7 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 
 	match_mux.Lock()
 	defer match_mux.Unlock() // in case exception is thrown, unlock when stack closes
-	conn = redis.Pool.Get()
+	conn := redis.Pool.Get()
 	defer conn.Close()
 
 	var amountUnexecuted = order_amt
@@ -313,10 +312,8 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 		"shares owned": so_float,
 	}).Info("Holdings")
 
-	var conn = redis.Pool.Get()
 	// set order details
-	_, err = conn.Do("HMSET", "order:"+transId_str, "account", acctId, "symbol", sym, "limit", order.Limit, "amount", order.Amount, "origAmount", order.Amount)
-	conn.Close()
+	err = SharedModel().createTransaction(transId_str, acctId, sym,order.Limit, order.Amount, time.Now())
 
 	if err != nil {
 		return
@@ -325,7 +322,7 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 	var members []string
 	match_mux.Lock()
 	defer match_mux.Unlock() // in case exception is thrown, unlock when stack closes
-	conn = redis.Pool.Get()
+	conn := redis.Pool.Get()
 	defer conn.Close()
 
 	// remove shares from user's account

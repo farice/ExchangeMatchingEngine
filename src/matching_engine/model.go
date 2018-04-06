@@ -213,11 +213,17 @@ func (m *Model) getMinimumSellOrder(symbol string, priceLimit float64) (uid stri
 
 /// Transactions
 
-func (m *Model) createTransaction(symbol string, amount float64, price float64, transactionTime time.Time) {
+func (m *Model) createTransaction(transId string, acctId string, sym string, limit string, amount string, transactionTime time.Time) (err error){
 	// TODO: Create in redis
+	conn := redis.Pool.Get()
+	defer conn.Close()
+	_, err = conn.Do("HMSET", "order:"+transId, "account", acctId, "symbol", sym, "limit", limit, "amount", amount, "origAmount", amount)
 
-	sqlQuery := fmt.Sprintf(`INSERT INTO transaction(symbol, amount, price, transaction_time VALUES('%s', %f, %f, %v)`, symbol, amount, price, transactionTime)
+
+	sqlQuery := fmt.Sprintf(`INSERT INTO transaction(symbol, amount, price, transaction_time VALUES('%s', %f, %f, %v)`, sym, amount, limit, transactionTime)
 	m.submitQuery(sqlQuery)
+
+	return
 }
 
 /// Symbols
