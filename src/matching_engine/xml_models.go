@@ -87,3 +87,9 @@ type ErrorCreateResponse struct {
 	Id      string   `xml:"id,attr,omitempty"`
 	Reason  string   `xml:",innerxml"`
 }
+
+type ErrorQueryCancelResponse struct {
+  XMLName xml.Name `xml:"error"`
+  TransactionID string   `xml:"id,attr"`
+  Reason  string   `xml:",innerxml"`
+}

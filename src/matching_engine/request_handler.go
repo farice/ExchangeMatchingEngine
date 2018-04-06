@@ -367,6 +367,7 @@ func (q *Query) handleQuery() (resp string, err error) {
 	trId := q.TransactionID
 	if trId == "" {
 		err = fmt.Errorf("Invalid Query")
+		resp += cancelQueryErrorMessage(trId, err.Error())
 		resp += "</status>"
 		return
 	}
@@ -379,6 +380,7 @@ func (q *Query) handleQuery() (resp string, err error) {
 		log.WithFields(log.Fields{
 			"err": err,
 		}).Error("Error")
+		resp += cancelQueryErrorMessage(trId, err.Error())
 		resp += "</status>"
 		return
 	}
@@ -389,14 +391,23 @@ func (q *Query) handleQuery() (resp string, err error) {
 	return
 }
 
+func cancelQueryErrorMessage(trId string, reason string) (resp string) {
+	fail := ErrorQueryCancelResponse{TransactionID: trId, Reason: reason}
+		if fail_string, err := xml.MarshalIndent(fail, "", "    "); err == nil {
+			resp = string(fail_string) + "\n"
+		}
+		return
+}
+
 func (c *Cancel) handleCancel() (resp string, err error) {
 	log.Info("handle cancel")
 	resp += "<canceled>\n"
 
 	trId := c.TransactionID
 	if trId == "" {
-		resp += "</canceled>"
 		err = fmt.Errorf("Invalid Query")
+		resp += cancelQueryErrorMessage(trId, err.Error())
+		resp += "</canceled>"
 		return
 	}
 
@@ -406,8 +417,9 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 
 	ex, _ := SharedModel().orderExists(trId)
 	if !ex {
-		resp += "</canceled>"
 		err = fmt.Errorf("Transaction does not exist")
+		resp += cancelQueryErrorMessage(trId, err.Error())
+		resp += "</canceled>"
 		return
 	}
 
@@ -415,6 +427,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 	data, err := SharedModel().getOrder(trId)
 	acct, sym, limit, amt := data[0], data[1], data[2], data[3]
 	if err != nil {
+		resp += cancelQueryErrorMessage(trId, err.Error())
 		resp += "</canceled>"
 		return
 	}
@@ -426,6 +439,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 
 	if len(data) != 5 {
 		err = fmt.Errorf("Malformed redis data")
+		resp += cancelQueryErrorMessage(trId, err.Error())
 		resp += "</canceled>"
 		return
 	}
@@ -443,6 +457,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 		}
 
 		if err != nil {
+			resp += cancelQueryErrorMessage(trId, err.Error())
 			resp += "</canceled>"
 			return
 		}
@@ -463,6 +478,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 		}
 
 		if err != nil {
+			resp += cancelQueryErrorMessage(trId, err.Error())
 			resp += "</canceled>"
 			return
 		}
@@ -471,6 +487,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 		exec_time := time.Now().String()
 		err = SharedModel().cancelOrder(trId, amt_f, exec_time)
 		if err != nil {
+			resp += cancelQueryErrorMessage(trId, err.Error())
 			resp += "</canceled>"
 			return
 		}
@@ -478,6 +495,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 
 	status, err := getOrderStatus(trId)
 	if err != nil {
+		resp += cancelQueryErrorMessage(trId, err.Error())
 		resp += "</canceled>"
 		return
 	}
