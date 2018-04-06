@@ -248,7 +248,7 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 			// get information on this matched order...
 			data, _ := SharedModel().getTransaction(members[0])
 
-			if len(data) != 4 {
+			if len(data) != 5 {
 				log.WithFields(log.Fields{
 					"data":      data,
 					"len(data)": len(data),
