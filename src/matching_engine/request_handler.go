@@ -549,18 +549,11 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 	buy := (amt_f > 0)
 
 	if amt_f != 0 {
-		
+
 	// remove from open orders sorted set
-	if buy {
-		_, err = conn.Do("ZREM", "open-buy:"+sym, trId)
-		if err != nil {
-			return
-		}
-	} else {
-		_, err = conn.Do("ZREM", "open-sell:"+sym, trId)
-		if err != nil {
-			return
-		}
+	err = closeOpenOrder(buy, sym, trId)
+	if err != nil {
+		return
 	}
 
 	if buy { // add money back to account if buy order
