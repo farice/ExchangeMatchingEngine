@@ -489,7 +489,7 @@ func createSymbol(sym *Symbol) (err error) {
 	// with the given ID. Note that this creation is legal even if sym already
 	// exists: in such a case, it is used to create more shares of that symbol
 	//and add them to existing accounts.
-	SharedModel().createOrUpdateSymbol(sym.Sym, 0.0)
+	SharedModel().createOrUpdateSymbol(sym.Sym)
 
 	for _, rcv_acct := range sym.Accounts {
 		ex, _ := SharedModel().accountExists(rcv_acct.Id)
