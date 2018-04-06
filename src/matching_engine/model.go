@@ -150,6 +150,14 @@ func (m *Model) addAccountBalance(accountID string, amount float64) (err error) 
 		return
 	}
 	redis.HIncrByFloat("acct:"+accountID, "balance", amount)
+
+	var newBalance float64
+	sqlQuery := fmt.Sprintf(`UPDATE account SET balance=balance+%f WHERE uid='%s' RETURNING balance`, amount, accountID)
+	sqlErr := m.db.QueryRow(sqlQuery).Scan(&newBalance)
+	if sqlErr != nil {
+		log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
+	}
+
 	return
 }
 
@@ -412,23 +420,23 @@ func (m *Model) addSharesToPosition(accountID string, symbol string, amount floa
 	return
 }
 
-func (m *Model) updatePosition(accountID string, symbol string, amount float64) (err error) {
-	println("@@@@@@@@ updatePosition")
-	positionExists := false
-	fetchQuery := fmt.Sprintf(`SELECT amount FROM position WHERE account_id='%s' AND symbol='%s'`, accountID, symbol)
-	var currentAmount float64
-	err = m.db.QueryRow(fetchQuery).Scan(&currentAmount)
-	positionExists = err == nil
-	if !positionExists {
-		// TODO: Write to cache
-		sqlQuery := fmt.Sprintf(`INSERT INTO position(account_id, symbol, amount) VALUES('%s', '%s', %f)`, accountID, symbol, amount)
-		m.submitQuery(sqlQuery)
-		return nil
-	}
-	sqlQuery := fmt.Sprintf(`UPDATE position SET amount=%f WHERE account_id = '%s' AND symbol='%s'`, currentAmount+amount, accountID, symbol)
-	m.submitQuery(sqlQuery)
-	return nil
-}
+// func (m *Model) updatePosition(accountID string, symbol string, amount float64) (err error) {
+// 	println("@@@@@@@@ updatePosition")
+// 	positionExists := false
+// 	fetchQuery := fmt.Sprintf(`SELECT amount FROM position WHERE account_id='%s' AND symbol='%s'`, accountID, symbol)
+// 	var currentAmount float64
+// 	err = m.db.QueryRow(fetchQuery).Scan(&currentAmount)
+// 	positionExists = err == nil
+// 	if !positionExists {
+// 		// TODO: Write to cache
+// 		sqlQuery := fmt.Sprintf(`INSERT INTO position(account_id, symbol, amount) VALUES('%s', '%s', %f)`, accountID, symbol, amount)
+// 		m.submitQuery(sqlQuery)
+// 		return nil
+// 	}
+// 	sqlQuery := fmt.Sprintf(`UPDATE position SET amount=%f WHERE account_id = '%s' AND symbol='%s'`, currentAmount+amount, accountID, symbol)
+// 	m.submitQuery(sqlQuery)
+// 	return nil
+// }
 
 func (m *Model) removePosition(accountID string, symbol string) (err error) {
 	println("@@@@@@@@ removePosition")
