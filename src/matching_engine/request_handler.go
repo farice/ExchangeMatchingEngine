@@ -9,8 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/farice/EME/redis"
-	redigo "github.com/gomodule/redigo/redis"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -23,90 +21,9 @@ var (
 func IncAndGet() int {
 	counter_mux.Lock()
 	// Lock so only one goroutine at a time can access c.count
-	ct, _ := redis.Incr("TransactionCounter")
+	ct, _ := SharedModel().incTransactionCounter()
 	defer counter_mux.Unlock()
 	return ct
-}
-
-// Remember to capitalize field names so they are exported
-
-type Account struct {
-	XMLName xml.Name `xml:"account"`
-	Id      string   `xml:"id,attr"`
-	Balance string   `xml:"balance,attr"`
-}
-
-type Symbol struct {
-	XMLName  xml.Name `xml:"symbol"`
-	Sym      string   `xml:"sym,attr"`
-	Accounts []struct {
-		Id     string `xml:"id,attr"`
-		Amount string `xml:",innerxml"`
-	} `xml:"account"`
-}
-
-type Order struct {
-	XMLName xml.Name `xml:"order"`
-	Sym     string   `xml:"sym,attr"`
-	Amount  string   `xml:"amount,attr"` // negative means to sell
-	Limit   string   `xml:"limit,attr"`
-}
-
-type Cancel struct {
-	XMLName       xml.Name `xml:"cancel"`
-	TransactionID string   `xml:"id,attr"`
-}
-
-type Query struct {
-	XMLName       xml.Name `xml:"query"`
-	TransactionID string   `xml:"id,attr"`
-}
-
-type OpenQueryResponse struct {
-	XMLName xml.Name `xml:"open"`
-	Shares  string   `xml:"shares,attr"`
-}
-
-type CancelQueryResponse struct {
-	XMLName xml.Name `xml:"canceled"`
-	Shares  string   `xml:"shares,attr"`
-	Time    string   `xml:"time,attr"`
-}
-
-type ExecutedQueryResponse struct {
-	XMLName xml.Name `xml:"executed"`
-	Shares  string   `xml:"shares,attr"`
-	Price   string   `xml:"price,attr"`
-	Time    string   `xml:"time,attr"`
-}
-
-type OpenResponse struct {
-	XMLName       xml.Name `xml:"opened"`
-	TransactionID string   `xml:"id,attr"`
-	Sym           string   `xml:"sym,attr"`
-	Amount        string   `xml:"amount,attr"` // negative means to sell
-	Limit         string   `xml:"limit,attr"`
-}
-
-type ErrorTransResponse struct {
-	XMLName xml.Name `xml:"error"`
-	Sym     string   `xml:"sym,attr"`
-	Amount  string   `xml:"amount,attr"` // negative means to sell
-	Limit   string   `xml:"limit,attr"`
-	Reason  string   `xml:",innerxml"`
-}
-
-type CreatedResponse struct {
-	XMLName xml.Name `xml:"created"`
-	Sym     string   `xml:"sym,attr,omitempty"`
-	Id      string   `xml:"id,attr,omitempty"`
-}
-
-type ErrorCreateResponse struct {
-	XMLName xml.Name `xml:"error"`
-	Sym     string   `xml:"sym,attr,omitempty"`
-	Id      string   `xml:"id,attr,omitempty"`
-	Reason  string   `xml:",innerxml"`
 }
 
 // must call with lock held to perform atomically
@@ -160,7 +77,6 @@ func executeOrder(
 		}
 	}
 
-	conn := redis.Pool.Get()
 	exec_time := time.Now().String()
 	err = SharedModel().updateSellOrderAmount(s_trId, s_amt_f+sharesToExecute)
 
@@ -168,7 +84,7 @@ func executeOrder(
 		return
 	}
 	// Update in Executed shares list
-	_, err = conn.Do("RPUSH", "order-executed:"+s_trId, -1*sharesToExecute, limit_usd, exec_time)
+	err = SharedModel().executedOrder(s_trId, -1 * sharesToExecute, limit_usd, exec_time)
 	if err != nil {
 		return
 	}
@@ -176,12 +92,11 @@ func executeOrder(
 	if err != nil {
 		return
 	}
-	_, err = conn.Do("RPUSH", "order-executed:"+b_trId, sharesToExecute, limit_usd, exec_time)
+	err = SharedModel().executedOrder(b_trId, sharesToExecute, limit_usd, exec_time)
 
 	if err != nil {
 		return
 	}
-	conn.Close()
 
 	if s_amt_f+sharesToExecute == 0 {
 		err = SharedModel().closeOpenSellOrder(s_trId, sym)
@@ -210,7 +125,7 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 	}
 
 	log.WithFields(log.Fields{
-		"transId":          transId_str,
+		"transId": transId_str,
 		"buy amount (USD)": order_amt * limit_f,
 		"balance":          bal_float,
 	}).Info("Funds")
@@ -226,22 +141,21 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 
 	match_mux.Lock()
 	defer match_mux.Unlock() // in case exception is thrown, unlock when stack closes
-	conn := redis.Pool.Get()
-	defer conn.Close()
 
 	var amountUnexecuted = order_amt
 
 	// loop until there are no more orders to execute
 	for {
-		members, err = redis.Zrange("open-sell:"+sym, 0, 0, true)
+		members, err = SharedModel().getMinimumSellOrder(sym, limit_f)
 		if err != nil {
 			return
 		}
 		if len(members) > 0 {
 			// get information on this matched order...
-			data, _ := redigo.Strings(conn.Do("HMGET", "order:"+members[0], "account", "symbol", "limit", "amount"))
+			// "account", "symbol", "limit", "amount"
+			data, _ := SharedModel().getTransaction(members[0])
 
-			if len(data) != 4 {
+			if len(data) != 5 {
 				log.WithFields(log.Fields{
 					"data":      data,
 					"len(data)": len(data),
@@ -275,7 +189,7 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 
 	if amountUnexecuted > 0 {
 		// No matches, add to open buy sorted set
-		err = redis.Zadd("open-buy:"+sym, order.Limit, transId_str)
+		SharedModel().createBuyOrder(transId_str, acctId, sym, amountUnexecuted, order.Limit, limit_f)
 		if err != nil {
 			return
 		}
@@ -290,16 +204,10 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 func (order *Order) handleSell(acctId string, transId_str string, sym string, order_amt float64, limit_f float64) (err error) {
 
 	// check if user has enough of SYM in their account
-	var shares_owned interface{}
-	shares_owned, err = redis.GetField("acct:"+acctId+":positions", sym)
+	so_float, err := SharedModel().getPositionAmount(acctId, sym)
 	if err != nil {
 		return
 	}
-	if shares_owned == nil {
-		err = fmt.Errorf("User owns no shares of %s", sym)
-		return
-	}
-	so_float, _ := strconv.ParseFloat(string(shares_owned.([]byte)), 64)
 
 	if -1*order_amt > so_float {
 		err = fmt.Errorf("Insufficient funds")
@@ -307,7 +215,7 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 	}
 
 	log.WithFields(log.Fields{
-		"transId":      transId_str,
+		"transId": transId_str,
 		"sell amount":  -1 * order_amt,
 		"shares owned": so_float,
 	}).Info("Holdings")
@@ -322,8 +230,6 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 	var members []string
 	match_mux.Lock()
 	defer match_mux.Unlock() // in case exception is thrown, unlock when stack closes
-	conn := redis.Pool.Get()
-	defer conn.Close()
 
 	// remove shares from user's account
 	SharedModel().addSharesToPosition(acctId, sym, order_amt)
@@ -333,14 +239,14 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 	for {
 
 		// find highest open buy order
-		members, err = redis.Zrange("open-buy:"+sym, -1, -1, true)
+		members, err = SharedModel().getMaximumBuyOrder(sym, limit_f)
 		if err != nil {
 			return
 		}
 
 		if len(members) > 0 {
 			// get information on this matched order...
-			data, _ := redigo.Strings(conn.Do("HMGET", "order:"+members[0], "account", "symbol", "limit", "amount"))
+			data, _ := SharedModel().getTransaction(members[0])
 
 			if len(data) != 4 {
 				log.WithFields(log.Fields{
@@ -376,7 +282,7 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 	// more shares to sell, still
 	if sharesRemaining < 0 {
 		// No matches, add to open sell sorted set
-		err = redis.Zadd("open-sell:"+sym, order.Limit, transId_str)
+		err = SharedModel().createSellOrder(transId_str, acctId, sym, sharesRemaining, order.Limit, limit_f)
 		if err != nil {
 			return
 		}
@@ -387,27 +293,25 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 }
 
 func getOrderStatus(trId string) (resp string, err error) {
-	conn := redis.Pool.Get()
-	defer conn.Close()
-
-	ex, _ := redis.Exists("order:"+trId)
+	ex, _ := SharedModel().transactionExists(trId)
 	if !ex {
 		resp = ""
 		err = fmt.Errorf("Transaction does not exist")
 		return
 	}
 
-	order_info, _ := redigo.Strings(conn.Do("HMGET", "order:"+trId, "amount", "origAmount"))
+	// "account", "symbol", "limit", "amount", "origAmount"
+	order_info, _ := SharedModel().getTransaction(trId)
 	log.WithFields(log.Fields{
-		"order info": order_info,
+		"order info: [acct, sym, lim, amt, o_amt]": order_info,
 	}).Info("Status transaction")
 
-	transactions, _ := redigo.Strings(conn.Do("LRANGE", "order-executed:"+trId, 0, -1))
+	transactions, _ := getPartialExecutions(trId)
 	log.WithFields(log.Fields{
 		"Transactions": transactions,
 	}).Info("Execution history")
 
-	if len(transactions)%3 != 0 {
+	if len(transactions) % 3 != 0 {
 		resp = ""
 		err = fmt.Errorf("Malformed Redis Data")
 		return
@@ -415,22 +319,22 @@ func getOrderStatus(trId string) (resp string, err error) {
 
 	len_trans := len(transactions) / 3
 	for i := 0; i < len_trans; i++ {
-		exec := ExecutedQueryResponse{Shares: transactions[3*i], Price: transactions[3*i+1], Time: transactions[3*i+2]}
+		exec := ExecutedQueryResponse{Shares: transactions[3 * i], Price: transactions[3 * i + 1], Time: transactions[3 * i + 2]}
 		if exec_string, err := xml.MarshalIndent(exec, "", "    "); err == nil {
 			resp += string(exec_string) + "\n"
 		}
 	}
 
 	remaining_amount, _ := strconv.ParseFloat(order_info[0], 64)
-	if remaining_amount != 0 {
+	if (remaining_amount != 0 ) {
 		open := OpenQueryResponse{Shares: order_info[0]}
 		if open_string, err := xml.MarshalIndent(open, "", "    "); err == nil {
 			resp += string(open_string) + "\n"
 		}
 	} else { // may have been cancelled!
-		ex, _ := redis.Exists("order-cancel:"+trId)
+		ex, _ := SharedModel().orderCancelled(trId)
 		if ex {
-			cancel_info, _ := redigo.Strings(conn.Do("HMGET", "order-cancel:"+trId, "amount", "time"))
+			cancel_info, _ := SharedModel().getCancelledOrderDetails(trId)
 			cancel := CancelQueryResponse{Shares: cancel_info[0], Time: cancel_info[1]}
 			if cancel_string, err := xml.MarshalIndent(cancel, "", "    "); err == nil {
 				resp += string(cancel_string) + "\n"
@@ -473,23 +377,22 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 
 	match_mux.Lock()
 	defer match_mux.Unlock()
-	conn := redis.Pool.Get()
-	defer conn.Close()
 
-	ex, _ := redis.Exists("order:"+trId)
+	ex, _ := SharedModel().transactionExists(trId)
 	if !ex {
 		resp = ""
 		err = fmt.Errorf("Transaction does not exist")
 		return
 	}
 
-	data, err := redigo.Strings(conn.Do("HMGET", "order:"+trId, "amount", "account", "limit", "sym"))
-	amt, acct, limit, sym := data[0], data[1], data[2], data[3]
+	// "account", "symbol", "limit", "amount"
+	data, err := SharedModel().getTransaction(trId)
+	acct, sym, limit, amt := data[0], data[1], data[2], data[3]
 	if err != nil{
 		return
 	}
 
-	if len(data) != 4 {
+	if len(data) != 5 {
 		err = fmt.Errorf("Malformed redis data")
 		return
 	}
@@ -519,7 +422,12 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 	}
 
 	// set remaining amount to 0
-	_, err = conn.Do("HSET", "order:"+trId, "amount", 0.0)
+	if buy {
+		err = SharedModel().updateBuyOrderAmount(trId, 0.0)
+	} else {
+		err = SharedModel().updateSellOrderAmount(trId, 0.0)
+	}
+
 	if err != nil {
 		return
 	}
@@ -564,59 +472,22 @@ func (order *Order) openOrder(acctId string) (transId int, err error) {
 	return
 }
 
-func createAccount(acct *Account) error {
-	// This creates a new account with the given unique ID and balance (in USD).
-	// The account has no positions. Attempting to create an account that already
-	// exists is an error.
-	ex, _ := redis.Exists("acct:" + acct.Id)
-	if acct.Id == "" {
-		// TODO: - Throw and handle error
-		return nil
-	}
-	if ex {
-		log.WithFields(log.Fields{
-			"ID": acct.Id,
-		}).Info("Duplicate account")
-		return fmt.Errorf("Duplicate account")
-	}
-
-	// Redis HMSET, maps key to hashmap of fields to values
-	err := redis.SetField("acct:"+acct.Id, "balance", acct.Balance)
-
-	if err != nil {
-		log.WithFields(log.Fields{
-			"Error": err,
-		}).Error("error setting account")
-		return fmt.Errorf("Error creating account")
-	}
-
-	// TEST: - Retrieve key + field, then log
-	bal, _ := redis.GetField("acct:"+acct.Id, "balance")
-	bal_float, _ := strconv.ParseFloat(string(bal.([]byte)), 64)
-	log.WithFields(log.Fields{
-		"ID":             acct.Id,
-		"Balance":        bal_float,
-		"Verify_Balance": acct.Balance,
-	}).Info("Created account")
-	// END TEST
-
-	return nil
+func (acct *Account) createAccount() (err error) {
+	err = SharedModel().createAccount(acct.Id, acct.Balance)
+	return err
 }
 
-func createSymbol(sym *Symbol) error {
+func createSymbol(sym *Symbol) (err error) {
 	// This creates the specified symbol. The symbol tag can have one or more
 	//children which are <account id="ID">NUM</account> These indicate that
 	// NUM shares of the symbol being created should be placed into the account
 	// with the given ID. Note that this creation is legal even if sym already
 	// exists: in such a case, it is used to create more shares of that symbol
 	//and add them to existing accounts.
-	ex, _ := redis.Exists("sym:" + sym.Sym)
-	if !ex {
-		redis.Set("sym:"+sym.Sym, "")
-	}
+	SharedModel().createOrUpdateSymbol(sym.Sym, 0.0)
 
 	for _, rcv_acct := range sym.Accounts {
-		ex, _ := redis.Exists("acct:" + rcv_acct.Id)
+		ex, _ := SharedModel().accountExists(rcv_acct.Id)
 		if !ex {
 			// TODO:- Handle error, account does not exist
 			log.WithFields(log.Fields{
@@ -632,8 +503,11 @@ func createSymbol(sym *Symbol) error {
 		}
 
 		// TEST: - Retrieve key + field, then log
-		bal, _ := redis.GetField("acct:"+rcv_acct.Id+":positions", sym.Sym)
-		bal_float, _ := strconv.ParseFloat(string(bal.([]byte)), 64)
+		bal_float, err := SharedModel().getPositionAmount(rcv_acct.Id, sym.Sym)
+		if err != nil {
+			return err
+			}
+
 		log.WithFields(log.Fields{
 			"ID":       rcv_acct.Id,
 			"Position": bal_float,
@@ -643,7 +517,7 @@ func createSymbol(sym *Symbol) error {
 
 	}
 
-	return nil
+	return
 	// element is the element from someSlice for where we are
 }
 
@@ -723,7 +597,7 @@ func parseXML(req []byte) (results string) {
 								"XML": acct,
 							}).Info("New create command: Account")
 
-							err = createAccount(&acct)
+							err = acct.createAccount()
 							if err == nil {
 								succ := CreatedResponse{Id: acct.Id}
 								if succ_string, err := xml.MarshalIndent(succ, "", "    "); err == nil {
