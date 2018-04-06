@@ -58,6 +58,15 @@ type Model struct {
 	commands chan string
 }
 
+// Counter
+
+func (m* Model) incTransactionCounter() (ct int, err error) {
+	ct, err = redis.Incr("TransactionCounter")
+
+	// TODO(maybe) - postgres
+	return
+}
+
 /// Accounts
 
 func (m *Model) createAccount(uid string, balance string) (err error) {
@@ -145,10 +154,19 @@ func (m *Model) addAccountBalance(accountID string, amount float64) (err error) 
 	return
 }
 
+func (m *Model) accountExists(accountID string) (ex bool, err error) {
+	ex, err = redis.Exists("acct:" + accountID)
+	// TODO - Postgres
+
+	return
+}
+
 /// Open orders
 
-func (m *Model) createBuyOrder(uid string, accountID string, symbol string, amount float64, priceLimit float64) (err error) {
+func (m *Model) createBuyOrder(uid string, accountID string, symbol string, amount float64, limit_str string, priceLimit float64) (err error) {
 	// TODO: Write to cache
+	err = redis.Zadd("open-buy:"+symbol, limit_str, uid)
+
 	sqlQuery := fmt.Sprintf(`INSERT INTO buy_order(uid, account_id, symbol, amount, price_limit) VALUES('%s', '%s', '%s', %f, %f);`, uid, accountID, symbol, amount, priceLimit)
 	m.submitQuery(sqlQuery)
 	return err
@@ -170,6 +188,49 @@ func (m *Model) cancelOrder(trId string, amt_f float64, time string) (err error)
 	_, err = conn.Do("HMSET", "order-cancel:"+trId, "amount", amt_f, "time", time)
 
 	// TODO - postgres
+
+	return
+}
+
+
+// is order cancelled
+func (m *Model) orderCancelled(trId string) (ex bool) {
+	ex, _ = redis.Exists("order-cancel:"+trId)
+	// TODO - postgres
+
+	return
+}
+
+func (m *Model) getCancelledOrderDetails(trId string) (cancel_info []string, err error){
+	conn := redis.Pool.Get()
+	defer conn.Close()
+
+	cancel_info, err = redigo.Strings(conn.Do("HMGET", "order-cancel:"+trId, "amount", "time"))
+
+	// TODO - postgres
+
+	return
+}
+
+// Update Executed shares list
+func (m *Model) executedOrder(trId string, amount float64, limit float64, time string) (err error) {
+	conn := redis.Pool.Get()
+	defer conn.Close()
+
+	_, err = conn.Do("RPUSH", "order-executed:"+trId, amount, limit, time)
+	// TODO - postgres
+
+	return
+}
+
+// from list constructed directly above
+func getPartialExecutions(trId string) (transactions []string, err error) {
+	conn := redis.Pool.Get()
+	defer conn.Close()
+
+	transactions, err = redigo.Strings(conn.Do("LRANGE", "order-executed:"+trId, 0, -1))
+
+	// TODO = postgres
 
 	return
 }
@@ -197,6 +258,8 @@ func (m *Model) closeOpenBuyOrder(uid string, sym string) (err error) {
 
 func (m *Model) createSellOrder(uid string, accountID string, symbol string, amount float64, priceLimit float64) (err error) {
 	// TODO: Write to redis
+	err = redis.Zadd("open-sell:"+symbol, priceLimit, uid)
+
 	sqlQuery := fmt.Sprintf(`INSERT INTO sell_order(uid, account_id, symbol, amount, price_limit) VALUES('%s', '%s', '%s', %f, %f);`, uid, accountID, symbol, amount, priceLimit)
 	m.submitQuery(sqlQuery)
 	return err
@@ -231,8 +294,12 @@ func (m *Model) closeOpenSellOrder(uid string, sym string) (err error) {
 	return
 }
 
-func (m *Model) getMaximumBuyOrder(symbol string, priceLimit float64) (uid string, err error) {
+func (m *Model) getMaximumBuyOrder(symbol string, priceLimit float64) (uid []string, err error) {
 	// TODO: Get from redis
+	uid, err = redigo.Strings(redis.Zrange("open-buy:"+symbol, -1, -1, true))
+	if uid[0] != "" {
+		return
+	}
 
 	sqlQuery := fmt.Sprintf(`SELECT TOP 1 uid FROM buy_order WHERE price_limit=(SELECT MAX(price_limit) FROM buy_order WHERE symbol=%s)  AND price_limit >= %f`, symbol, priceLimit)
 	err = m.db.QueryRow(sqlQuery).Scan(&uid)
@@ -243,8 +310,12 @@ func (m *Model) getMaximumBuyOrder(symbol string, priceLimit float64) (uid strin
 
 }
 
-func (m *Model) getMinimumSellOrder(symbol string, priceLimit float64) (uid string, err error) {
+func (m *Model) getMinimumSellOrder(symbol string, priceLimit float64) (uid []string, err error) {
 	// TODO: Find in cache
+	uid, err = redigo.Strings(redis.Zrange("open-sell:"+symbol, 0, 0, true))
+	if uid[0] != "" {
+		return
+	}
 
 	// If must go to db
 	sqlQuery := fmt.Sprintf(`SELECT TOP 1 uid FROM sell_order WHERE price_limit=(SELECT MIN(price_limit) FROM sell_order WHERE symbol=%s)  AND price_limit <= %f`, symbol, priceLimit)
@@ -257,6 +328,13 @@ func (m *Model) getMinimumSellOrder(symbol string, priceLimit float64) (uid stri
 
 /// Transactions
 
+func (m *Model) transactionExists(transId string) (ex bool) {
+	ex = redis.Exists("order:"+transId)
+
+	// TODO - postgres
+
+	return
+}
 func (m *Model) createTransaction(transId string, acctId string, sym string, limit string, amount string, transactionTime time.Time) (err error) {
 	// TODO: Create in redis
 	conn := redis.Pool.Get()
@@ -269,9 +347,25 @@ func (m *Model) createTransaction(transId string, acctId string, sym string, lim
 	return
 }
 
+func (m *Model) getTransaction(trId string) (data []string, err error) {
+	conn := redis.Pool.Get()
+	defer conn.Close()
+	data, err = redigo.Strings(conn.Do("HMGET", "order:"+trId, "account", "symbol", "limit", "amount", "origAmount"))
+	// TODO - postgres
+
+	return
+}
+
 /// Symbols
 
 func (m *Model) createOrUpdateSymbol(symbol string, shares float64) (err error) {
+	ex, _ := redis.Exists("sym:" + symbol)
+	if !ex {
+		redis.Set("sym:"+sym.Sym, "")
+	}
+
+	// TODO - What is shares total? We don't need this kind of info
+	// TODO - Just need to store whether symbol exists, feel free to delete most of below
 	exists, totalShares, err := m.getSymbolSharesTotal(symbol)
 	if !exists {
 		// TODO: Set amount in redis
