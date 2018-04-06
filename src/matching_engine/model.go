@@ -106,10 +106,10 @@ func (m *Model) createAccount(uid string, balance string) (err error) {
 	}).Info("Created account")
 	// END TEST
 
+	balanceFloat, _ := strconv.ParseFloat(balance, 64)
 	// postgres. Will reject if duplicate.
-	sqlQuery := fmt.Sprintf("INSERT INTO account(uid, balance) VALUES('%s', %f)", uid, bal_float)
+	sqlQuery := fmt.Sprintf("INSERT INTO account(uid, balance) VALUES('%s', %f)", uid, balanceFloat)
 	m.submitQuery(sqlQuery)
-
 	return
 }
 
@@ -250,8 +250,8 @@ func (m *Model) closeOpenBuyOrder(uid string, sym string) (err error) {
 	// If have to go to db
 	// TODO - Fix query (syntax error)
 	sqlQuery := fmt.Sprintf(`DELETE FROM buy_order WHERE uid='%s'`, uid)
-	sql_err := m.db.QueryRow(sqlQuery).Scan()
-	if sql_err != nil {
+	sqlErr := m.db.QueryRow(sqlQuery).Scan()
+	if sqlErr != nil {
 		log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
 	}
 	return
@@ -289,8 +289,8 @@ func (m *Model) closeOpenSellOrder(uid string, sym string) (err error) {
 
 	// If must go to db
 	sqlQuery := fmt.Sprintf(`DELETE FROM sell_order WHERE uid='%s'`, uid)
-	sql_err := m.db.QueryRow(sqlQuery).Scan()
-	if sql_err != nil {
+	sqlErr := m.db.QueryRow(sqlQuery).Scan()
+	if sqlErr != nil {
 		log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
 	}
 	return
