@@ -303,8 +303,8 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 }
 
 func getOrderStatus(trId string) (resp string, err error) {
-    log.Info("Get order status")
-    ex, _ := SharedModel().orderExists(trId)
+	log.Info("Get order status")
+	ex, _ := SharedModel().transactionExists(trId)
 	if !ex {
 		resp = ""
 		err = fmt.Errorf("Transaction does not exist")
@@ -399,7 +399,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 	match_mux.Lock()
 	defer match_mux.Unlock()
 
-	ex, _ := SharedModel().orderExists(trId)
+	ex, _ := SharedModel().transactionExists(trId)
 	if !ex {
 		resp = ""
 		err = fmt.Errorf("Transaction does not exist")
