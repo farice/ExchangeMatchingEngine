@@ -145,16 +145,16 @@ func executeOrder(
 	}).Info("Matched open orders")
 
 	// add shares to buyer's account (don't worry about seller, they had shares removed when order opened)
-	addShares(b_acctId, sym, sharesToExecute)
+	SharedModel().addOrSetSharesToPosition(b_acctId, sym, sharesToExecute)
 	// add money to seller's account
-	err = addAccountBalance(s_acctId, sharesToExecute*limit_usd)
+	err = SharedModel().addAccountBalance(s_acctId, sharesToExecute*limit_usd)
 	if err != nil {
 		return
 	}
 
 	// remove money from buyer because money wasn't removed yet at order open
 	if !matchAtBuyPrice {
-		err = addAccountBalance(b_acctId, -1*sharesToExecute*limit_usd)
+		err = SharedModel().addAccountBalance(b_acctId, -1*sharesToExecute*limit_usd)
 		if err != nil {
 			return
 		}
@@ -162,7 +162,7 @@ func executeOrder(
 
 	conn := redis.Pool.Get()
 	exec_time := time.Now().String()
-	_, err = conn.Do("HSET", "order:"+s_trId, "amount", s_amt_f+sharesToExecute)
+	err = SharedModel().updateSellOrderAmount(s_trId, s_amt_f+sharesToExecute)
 
 	if err != nil {
 		return
@@ -172,7 +172,7 @@ func executeOrder(
 	if err != nil {
 		return
 	}
-	_, err = conn.Do("HSET", "order:"+b_trId, "amount", b_amt_f-sharesToExecute)
+	err = SharedModel().updateBuyOrderAmount(b_trId, b_amt_f-sharesToExecute)
 	if err != nil {
 		return
 	}
@@ -184,63 +184,15 @@ func executeOrder(
 	conn.Close()
 
 	if s_amt_f+sharesToExecute == 0 {
-		closeOpenOrder(false, sym, s_trId)
+		err = SharedModel().closeOpenSellOrder(s_trId, sym)
 	}
 
 	if b_amt_f-sharesToExecute == 0 {
-		closeOpenOrder(true, sym, b_trId)
+		err = SharedModel().closeOpenBuyOrder(b_trId, sym)
 	}
 
 	return
 
-}
-
-func closeOpenOrder(buy bool, sym string, transId string) (err error) {
-	conn := redis.Pool.Get()
-	defer conn.Close()
-	if buy {
-		_, err = conn.Do("ZREM", "open-buy:"+sym, transId)
-	} else {
-		_, err = conn.Do("ZREM", "open-sell:"+sym, transId)
-	}
-
-	return
-
-}
-
-// func getAccountBalance(acctId string) (bal_f float64, err error) {
-// 	bal, _ := redis.GetField("acct:"+acctId, "balance")
-// 	if bal == nil {
-// 		// If a user balance is nil, it does not exist
-// 		err = fmt.Errorf("User %s does not exist", acctId)
-// 		return
-// 	}
-// 	bal_f, _ = strconv.ParseFloat(string(bal.([]byte)), 64)
-
-// 	return
-// }
-
-func addAccountBalance(acctId string, amount float64) (err error) {
-	ex, _ := redis.HExists("acct:"+acctId, "balance")
-	if ex == false {
-		// If a user balance is nil, it does not exist
-		err = fmt.Errorf("User %s does not exist", acctId)
-		return
-	}
-
-	redis.HIncrByFloat("acct:"+acctId, "balance", amount)
-	return
-}
-
-func addShares(acctId string, sym string, amount float64) {
-	ex, _ := redis.HExists("acct:"+acctId+":positions", sym)
-
-	if ex {
-
-		redis.HIncrByFloat("acct:"+acctId+":positions", sym, amount)
-	} else {
-		redis.SetField("acct:"+acctId+":positions", sym, amount)
-	}
 }
 
 func (order *Order) handleBuy(acctId string, transId_str string, sym string, order_amt float64, limit_f float64) (err error) {
@@ -263,9 +215,8 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 		"balance":          bal_float,
 	}).Info("Funds")
 
-	var conn = redis.Pool.Get()
-	_, err = conn.Do("HMSET", "order:"+transId_str, "account", acctId, "symbol", sym, "limit", order.Limit, "amount", order.Amount, "origAmount", order.Amount)
-	conn.Close()
+
+	err = SharedModel().createTransaction(transId_str, acctId, sym,order.Limit, order.Amount, time.Now())
 
 	if err != nil {
 		return
@@ -275,7 +226,7 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 
 	match_mux.Lock()
 	defer match_mux.Unlock() // in case exception is thrown, unlock when stack closes
-	conn = redis.Pool.Get()
+	conn := redis.Pool.Get()
 	defer conn.Close()
 
 	var amountUnexecuted = order_amt
@@ -330,7 +281,7 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 		}
 
 		// remove funds from account, because not all was matched immediately
-		addAccountBalance(acctId, -1*amountUnexecuted*limit_f)
+		SharedModel().addAccountBalance(acctId, -1*amountUnexecuted*limit_f)
 	}
 
 	return
@@ -361,10 +312,8 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 		"shares owned": so_float,
 	}).Info("Holdings")
 
-	var conn = redis.Pool.Get()
 	// set order details
-	_, err = conn.Do("HMSET", "order:"+transId_str, "account", acctId, "symbol", sym, "limit", order.Limit, "amount", order.Amount, "origAmount", order.Amount)
-	conn.Close()
+	err = SharedModel().createTransaction(transId_str, acctId, sym,order.Limit, order.Amount, time.Now())
 
 	if err != nil {
 		return
@@ -373,11 +322,11 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 	var members []string
 	match_mux.Lock()
 	defer match_mux.Unlock() // in case exception is thrown, unlock when stack closes
-	conn = redis.Pool.Get()
+	conn := redis.Pool.Get()
 	defer conn.Close()
 
 	// remove shares from user's account
-	redis.HIncrByFloat("acct:"+acctId+":positions", sym, order_amt)
+	SharedModel().addSharesToPosition(acctId, sym, order_amt)
 
 	var sharesRemaining = order_amt // shares left to sell (<= 0)
 
@@ -551,17 +500,22 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 	if amt_f != 0 {
 
 	// remove from open orders sorted set
-	err = closeOpenOrder(buy, sym, trId)
+	if buy {
+		err = SharedModel().closeOpenBuyOrder(trId, sym)
+	} else {
+		err = SharedModel().closeOpenSellOrder(trId, sym)
+	}
+
 	if err != nil {
 		return
 	}
 
 	if buy { // add money back to account if buy order
 		limit_f, _ := strconv.ParseFloat(limit, 64)
-		addAccountBalance(acct, limit_f * amt_f)
+		SharedModel().addAccountBalance(acct, limit_f * amt_f)
 
 	} else { // add shares back to account if sell order
-		addShares(acct, sym, -1 * amt_f)
+		SharedModel().addOrSetSharesToPosition(acct, sym, -1 * amt_f)
 	}
 
 	// set remaining amount to 0
@@ -572,7 +526,7 @@ func (c *Cancel) handleCancel() (resp string, err error) {
 
 	// store info
 	exec_time := time.Now().String()
-	_, err = conn.Do("HMSET", "order-cancel:"+trId, "amount", amt_f, "time", exec_time)
+	err = SharedModel().cancelOrder(trId, amt_f, exec_time)
 	if err != nil {
 		return
 	}
@@ -672,14 +626,8 @@ func createSymbol(sym *Symbol) error {
 
 		} else {
 			// acct:ID:positions is a hashmap of all of the user's positions
-			ex, _ := redis.HExists("acct:"+rcv_acct.Id+":positions", sym.Sym)
-
-			if ex {
-				amt_float, _ := strconv.ParseFloat(rcv_acct.Amount, 64)
-				redis.HIncrByFloat("acct:"+rcv_acct.Id+":positions", sym.Sym, amt_float)
-			} else {
-				redis.SetField("acct:"+rcv_acct.Id+":positions", sym.Sym, rcv_acct.Amount)
-			}
+			amt_float, _ := strconv.ParseFloat(rcv_acct.Amount, 64)
+			SharedModel().addOrSetSharesToPosition(rcv_acct.Id, sym.Sym, amt_float)
 
 		}
 

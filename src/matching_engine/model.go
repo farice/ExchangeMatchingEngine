@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/farice/EME/redis"
+	redigo "github.com/gomodule/redigo/redis"
 	_ "github.com/lib/pq"
 	log "github.com/sirupsen/logrus"
 )
@@ -106,10 +107,10 @@ func (m *Model) addAccountBalance(accountID string, amount float64) (err error) 
 		err = m.db.QueryRow(fmt.Sprintf(`UPDATE symbol SET balance=%f WHERE uid='%s'`, currentAmount+amount, accountID)).Scan()
 		// TODO: Add account to redis store
 
-		return nil
+		return
 	}
 	redis.HIncrByFloat("acct:"+accountID, "balance", amount)
-	return nil
+	return
 }
 
 /// Open orders
@@ -122,20 +123,44 @@ func (m *Model) createBuyOrder(uid string, accountID string, symbol string, amou
 }
 
 func (m *Model) updateBuyOrderAmount(uid string, newAmount float64) (err error) {
-	// TODO: Write to redis
 
-	sqlQuery := fmt.Sprintf(`UPDATE sell_order SET amount=%f WHERE uid = '%s'`, newAmount, uid)
+	err = redis.SetField("order:"+uid, "amount", newAmount)
+
+	sqlQuery := fmt.Sprintf(`UPDATE buy_order SET amount=%f WHERE uid = '%s'`, newAmount, uid)
 	m.submitQuery(sqlQuery)
-	return nil
+	return
 }
 
-func (m *Model) cancelBuyOrder(uid string, accountID string) (err error) {
+// fills cancellation details
+func (m *Model) cancelOrder(trId string, amt_f float64, time string) (err error) {
+	conn := redis.Pool.Get()
+	defer conn.Close()
+	_, err = conn.Do("HMSET", "order-cancel:"+trId, "amount", amt_f, "time", time)
+
+	// TODO - postgres
+
+	return
+}
+
+func (m *Model) closeOpenBuyOrder(uid string, sym string) (err error) {
 	// TODO: Get from redis
+	conn := redis.Pool.Get()
+	defer conn.Close()
+	// num deleted
+	var num int
+	num, err = redigo.Int(conn.Do("ZREM", "open-buy:"+sym, uid))
+
+	log.WithFields(log.Fields{
+		"transId": uid,
+		"error": err,
+		"deleted": num,
+	}).Info("Removed open order from sorted set")
 
 	// If have to go to db
-	sqlQuery := fmt.Sprintf(`DELETE * from buy_order WHERE uid='%s'`, uid)
-	err = m.db.QueryRow(sqlQuery).Scan()
-	return err
+	// TODO - Fix query (syntax error)
+	//sqlQuery := fmt.Sprintf(`DELETE * from buy_order WHERE uid='%s'`, uid)
+	//err = m.db.QueryRow(sqlQuery).Scan()
+	return
 }
 
 func (m *Model) createSellOrder(uid string, accountID string, symbol string, amount float64, priceLimit float64) (err error) {
@@ -146,19 +171,31 @@ func (m *Model) createSellOrder(uid string, accountID string, symbol string, amo
 }
 
 func (m *Model) updateSellOrderAmount(uid string, newAmount float64) (err error) {
-	// TODO: Write to redis
+	err = redis.SetField("order:"+uid, "amount", newAmount)
 
 	sqlQuery := fmt.Sprintf(`UPDATE sell_order SET amount=%f WHERE uid = '%s'`, newAmount, uid)
 	m.submitQuery(sqlQuery)
-	return err
+	return
 }
 
-func (m *Model) cancelSellOrder(uid string, accountID string) (err error) {
-	// TODO: Find in cache
+func (m *Model) closeOpenSellOrder(uid string, sym string) (err error) {
+	conn := redis.Pool.Get()
+	defer conn.Close()
+	// num deleted
+	var num int
+	num, err = redigo.Int(conn.Do("ZREM", "open-sell:"+sym, uid))
+
+	log.WithFields(log.Fields{
+		"transId": uid,
+		"error": err,
+		"deleted": num,
+	}).Info("Removed open order from sorted set")
 
 	// If must go to db
-	sqlQuery := fmt.Sprintf(`DELETE * from sell_order WHERE uid='%s'`, uid)
-	err = m.db.QueryRow(sqlQuery).Scan()
+	// TODO - Fix query (syntax error)
+	//sqlQuery := fmt.Sprintf(`DELETE * from sell_order WHERE uid='%s'`, uid)
+	//err = m.db.QueryRow(sqlQuery).Scan()
+
 	return
 }
 
@@ -188,11 +225,17 @@ func (m *Model) getMinimumSellOrder(symbol string, priceLimit float64) (uid stri
 
 /// Transactions
 
-func (m *Model) createTransaction(symbol string, amount float64, price float64, transactionTime time.Time) {
+func (m *Model) createTransaction(transId string, acctId string, sym string, limit string, amount string, transactionTime time.Time) (err error){
 	// TODO: Create in redis
+	conn := redis.Pool.Get()
+	defer conn.Close()
+	_, err = conn.Do("HMSET", "order:"+transId, "account", acctId, "symbol", sym, "limit", limit, "amount", amount, "origAmount", amount)
 
-	sqlQuery := fmt.Sprintf(`INSERT INTO transaction(symbol, amount, price, transaction_time VALUES('%s', %f, %f, %v)`, symbol, amount, price, transactionTime)
+
+	sqlQuery := fmt.Sprintf(`INSERT INTO transaction(symbol, amount, price, transaction_time VALUES('%s', %f, %f, %v)`, sym, amount, limit, transactionTime)
 	m.submitQuery(sqlQuery)
+
+	return
 }
 
 /// Symbols
@@ -229,6 +272,31 @@ func (m *Model) getSymbolSharesTotal(symbol string) (symbolExists bool, shares f
 }
 
 /// Positions
+
+// Add shares to existing position or set shares to value if dne
+func (m *Model) addOrSetSharesToPosition(acctId string, sym string, amount float64) (err error) {
+	ex, _ := redis.HExists("acct:"+acctId+":positions", sym)
+
+	if ex {
+
+		_, err = redis.HIncrByFloat("acct:"+acctId+":positions", sym, amount)
+	} else {
+		err = redis.SetField("acct:"+acctId+":positions", sym, amount)
+	}
+
+	// TODO - Postgres
+
+	return
+}
+
+func (m *Model) addSharesToPosition(acctId string, sym string, amount float64) (err error) {
+
+	_, err = redis.HIncrByFloat("acct:"+acctId+":positions", sym, amount)
+
+	// TODO - Postgres
+
+	return
+}
 
 func (m *Model) updatePosition(accountID string, symbol string, amount float64) (err error) {
 	positionExists := false
