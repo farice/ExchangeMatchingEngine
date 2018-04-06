@@ -64,20 +64,20 @@ type Query struct {
 
 type OpenQueryResponse struct {
 	XMLName xml.Name `xml:"open"`
-	Shares string   `xml:"shares,attr"`
+	Shares  string   `xml:"shares,attr"`
 }
 
 type CancelQueryResponse struct {
 	XMLName xml.Name `xml:"canceled"`
-	Shares string   `xml:"shares,attr"`
-	Time string `xml:"time,attr"`
+	Shares  string   `xml:"shares,attr"`
+	Time    string   `xml:"time,attr"`
 }
 
 type ExecutedQueryResponse struct {
 	XMLName xml.Name `xml:"executed"`
-	Shares string   `xml:"shares,attr"`
-	Price string   `xml:"price,attr"`
-	Time string `xml:"time,attr"`
+	Shares  string   `xml:"shares,attr"`
+	Price   string   `xml:"price,attr"`
+	Time    string   `xml:"time,attr"`
 }
 
 type OpenResponse struct {
@@ -168,7 +168,7 @@ func executeOrder(
 		return
 	}
 	// Update in Executed shares list
-	_, err = conn.Do("RPUSH", "order-executed:"+s_trId, -1 * sharesToExecute, limit_usd, exec_time)
+	_, err = conn.Do("RPUSH", "order-executed:"+s_trId, -1*sharesToExecute, limit_usd, exec_time)
 	if err != nil {
 		return
 	}
@@ -258,7 +258,7 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 	}
 
 	log.WithFields(log.Fields{
-		"transId": transId_str,
+		"transId":          transId_str,
 		"buy amount (USD)": order_amt * limit_f,
 		"balance":          bal_float,
 	}).Info("Funds")
@@ -356,7 +356,7 @@ func (order *Order) handleSell(acctId string, transId_str string, sym string, or
 	}
 
 	log.WithFields(log.Fields{
-		"transId": transId_str,
+		"transId":      transId_str,
 		"sell amount":  -1 * order_amt,
 		"shares owned": so_float,
 	}).Info("Holdings")
@@ -460,7 +460,7 @@ func (q *Query) handleQuery() (resp string, err error) {
 		"Transactions": transactions,
 	}).Info("Execution history")
 
-	if len(transactions) % 3 != 0 {
+	if len(transactions)%3 != 0 {
 		resp = ""
 		err = fmt.Errorf("Malformed Redis Data")
 		return
@@ -468,14 +468,14 @@ func (q *Query) handleQuery() (resp string, err error) {
 
 	len_trans := len(transactions) / 3
 	for i := 0; i < len_trans; i++ {
-		exec := ExecutedQueryResponse{Shares: transactions[3 * i], Price: transactions[3 * i + 1], Time: transactions[3 * i + 2]}
+		exec := ExecutedQueryResponse{Shares: transactions[3*i], Price: transactions[3*i+1], Time: transactions[3*i+2]}
 		if exec_string, err := xml.MarshalIndent(exec, "", "    "); err == nil {
 			resp += string(exec_string) + "\n"
 		}
 	}
 
 	remaining_amount, _ := strconv.ParseFloat(order_info[0], 64)
-	if (remaining_amount != 0 ) {
+	if remaining_amount != 0 {
 		open := OpenQueryResponse{Shares: order_info[0]}
 		if open_string, err := xml.MarshalIndent(open, "", "    "); err == nil {
 			resp += string(open_string) + "\n"
@@ -599,6 +599,8 @@ func createSymbol(sym *Symbol) error {
 }
 
 func parseXML(req []byte) (results string) {
+
+	defer LogMethodTimeElapsed("request_handler.parseXML", time.Now())
 
 	decoder := xml.NewDecoder(bytes.NewReader(req))
 	var inElement string
@@ -813,6 +815,7 @@ func parseXML(req []byte) (results string) {
 // Send bytes to Connection
 func (c *Connection) handleRequest(req []byte) {
 	// New Message Received
+	defer LogMethodTimeElapsed("request_handler.handleRequest", time.Now())
 	results := parseXML(req)
 	c.Send(results)
 }
