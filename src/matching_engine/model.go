@@ -60,17 +60,49 @@ type Model struct {
 
 /// Accounts
 
-func (m *Model) createAccount(uid string, balance float64) (err error) {
-	// TODO: Write to cache
-	err = m.createAccountWithID(uid, balance)
-	return err
-}
+func (m *Model) createAccount(uid string, balance string) (err error) {
+	// This creates a new account with the given unique ID and balance (in USD).
+	// The account has no positions. Attempting to create an account that already
+	// exists is an error.
+	ex, _ := redis.Exists("acct:" + uid)
+	if uid == "" {
+		// TODO: - Throw and handle error
+		return nil
+	}
+	if ex {
+		log.WithFields(log.Fields{
+			"ID": uid,
+		}).Info("Duplicate account")
+		return fmt.Errorf("Duplicate account")
+	}
 
-func (m *Model) createAccountWithID(uid string, balance float64) (err error) {
-	// TODO: Write to cache
+	// Redis HMSET, maps key to hashmap of fields to values
+	err = redis.SetField("acct:"+uid, "balance", balance)
+
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error": err,
+		}).Error("error setting account")
+		err = fmt.Errorf("Error creating account")
+		return
+	}
+
+	// TEST: - Retrieve key + field, then log
+	bal, _ := redis.GetField("acct:"+uid, "balance")
+	bal_float, _ := strconv.ParseFloat(string(bal.([]byte)), 64)
+	log.WithFields(log.Fields{
+		"ID":             uid,
+		"Balance":        bal_float,
+		"Verify_Balance": balance,
+	}).Info("Created account")
+	// END TEST
+
+
+	// postgres
 	sqlQuery := fmt.Sprintf("INSERT INTO account(uid, balance) VALUES('%s', %f)", uid, balance)
 	m.submitQuery(sqlQuery)
-	return nil
+
+	return
 }
 
 func (m *Model) getAccountBalance(accountID string) (balance float64, err error) {
