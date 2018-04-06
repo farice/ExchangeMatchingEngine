@@ -25,8 +25,7 @@ CREATE TABLE IF NOT EXISTS sell_order (
     amount float
 );
 CREATE TABLE IF NOT EXISTS symbol (
-    name varchar PRIMARY KEY,
-    shares float
+    name varchar PRIMARY KEY
 );
 CREATE TABLE IF NOT EXISTS transaction (
     symbol varchar,
