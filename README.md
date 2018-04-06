@@ -5,7 +5,7 @@
 ```bash
 $ sudo docker-compose build
 $ sudo docker-compose up -d
-$ cd tests && ./tests.sh
+$ cd testing && ./tests.sh
 ```
 
 ### Suggested Readings
