@@ -269,6 +269,7 @@ func confirmDelete(deleteQuery string) {
 }
 
 func (m *Model) submitQuery(query string) {
+	defer LogMethodTimeElapsed("model.submitQuery", time.Now())
 	m.commands <- query
 	if len(m.commands) >= bufferCapacity {
 		m.executeQueries()
