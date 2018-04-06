@@ -59,6 +59,9 @@ func init() {
 func main() {
 	var clientCount = 0
 
+	// Set up logging for performance benchmarking
+	CreateBenchmarkingLog()
+
 	// addr: exchange, port: 12345
 	server := NewTCPServer("exchange:12345")
 
