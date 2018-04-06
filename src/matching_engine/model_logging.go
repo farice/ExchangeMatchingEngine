@@ -27,7 +27,7 @@ func outputAccounts(rowLimit int) {
 	}
 	var uid string
 	var balance float64
-	println("\n#######  ACCOUNTS (max 50):")
+	println("\n#######  ACCOUNTS:")
 	for rows.Next() {
 		err = rows.Scan(&uid, &balance)
 		println(fmt.Sprintf("AccountID: %s -- Balance: %f", uid, balance))
@@ -37,17 +37,16 @@ func outputAccounts(rowLimit int) {
 func outputSymbols(rowLimit int) {
 	tableName := "symbol"
 	var symbol string
-	var shares float64
 
 	rows, err := SharedModel().db.Query(fmt.Sprintf("SELECT * FROM %s LIMIT %d", tableName, rowLimit))
 	if err != nil {
 		log.Info("Error attempting to print symbols: ", err)
 		return
 	}
-	println("\n#######  SYMBOLS (max 50): ")
+	println("\n#######  SYMBOLS: ")
 	for rows.Next() {
-		err = rows.Scan(&symbol, &shares)
-		println(fmt.Sprintf("Symbol: %s -- Shares: %f", symbol, shares))
+		err = rows.Scan(&symbol)
+		println(fmt.Sprintf("Symbol: %s", symbol))
 	}
 }
 
@@ -57,12 +56,14 @@ func outputPositions(rowLimit int) {
 	var symbol string
 	var amount float64
 
-	rows, err := SharedModel().db.Query(fmt.Sprintf("SELECT * FROM %s LIMIT %d", tableName, rowLimit))
+	sqlQuery := fmt.Sprintf("SELECT * FROM %s LIMIT %d", tableName, rowLimit)
+	println("QUERY: ", sqlQuery)
+	rows, err := SharedModel().db.Query(sqlQuery)
 	if err != nil {
 		log.Info("Error attempting to print positions: ", err)
 		return
 	}
-	println("\n#######  POSITIONS (max 50): ")
+	println("\n#######  POSITIONS: ")
 	for rows.Next() {
 		err = rows.Scan(&accountID, &symbol, &amount)
 		println(fmt.Sprintf("AccountID: %s -- Symbol: %s -- Amount: %f", accountID, symbol, amount))
@@ -78,16 +79,15 @@ func outputBuyOrders(rowLimit int) {
 	var amount float64
 
 	sqlQuery := fmt.Sprintf("SELECT * FROM %s LIMIT %d", tableName, rowLimit)
-	print("QUERY: ", sqlQuery)
 	rows, err := SharedModel().db.Query(sqlQuery)
 	if err != nil {
 		log.Info("Error attempting to print buy orders: ", err)
 		return
 	}
-	println("\n#######  BUY ORDERS (max 50): ")
+	println("\n#######  BUY ORDERS: ")
 	for rows.Next() {
 		err = rows.Scan(&uid, &accountID, &symbol, &priceLimit, &amount)
-		println(fmt.Sprintf("UID: %s -- AccountID: %f -- Symbol: %s -- PriceLimit: %f -- Amount: %f", uid, accountID, symbol, priceLimit, amount))
+		println(fmt.Sprintf("UID: %s -- AccountID: %s -- Symbol: %s -- PriceLimit: %f -- Amount: %f", uid, accountID, symbol, priceLimit, amount))
 	}
 }
 
@@ -104,10 +104,10 @@ func outputSellOrders(rowLimit int) {
 		log.Info("Error attempting to print sell orders: ", err)
 		return
 	}
-	println("\n#######  SELL ORDERS (max 50): ")
+	println("\n#######  SELL ORDERS: ")
 	for rows.Next() {
 		err = rows.Scan(&uid, &accountID, &symbol, &priceLimit, &amount)
-		println(fmt.Sprintf("UID: %s -- AccountID: %f -- Symbol: %s -- PriceLimit: %f -- Amount: %f", uid, accountID, symbol, priceLimit, amount))
+		println(fmt.Sprintf("UID: %s -- AccountID: %s -- Symbol: %s -- PriceLimit: %f -- Amount: %f", uid, accountID, symbol, priceLimit, amount))
 	}
 }
 
@@ -123,7 +123,7 @@ func outputTransactions(rowLimit int) {
 		log.Info("Error attempting to print transactions: ", err)
 		return
 	}
-	println("\n#######  TRANSACTIONS (max 50): ")
+	println("\n#######  TRANSACTIONS: ")
 	for rows.Next() {
 		err = rows.Scan(&symbol, &amount, &price, &transactionTime)
 		println(fmt.Sprintf("Symbol: %s -- Amount: %f -- Price: %s -- TransactionTime: %v", &symbol, &amount, &price, &transactionTime))

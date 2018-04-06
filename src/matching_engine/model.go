@@ -163,7 +163,7 @@ func (m *Model) accountExists(accountID string) (ex bool, err error) {
 /// Open orders
 
 func (m *Model) createBuyOrder(uid string, accountID string, symbol string, amount float64, limit_str string, priceLimit float64) (err error) {
-	// TODO: Write to cache
+
 	err = redis.Zadd("open-buy:"+symbol, limit_str, uid)
 
 	sqlQuery := fmt.Sprintf(`INSERT INTO buy_order(uid, account_id, symbol, amount, price_limit) VALUES('%s', '%s', '%s', %f, %f);`, uid, accountID, symbol, amount, priceLimit)
@@ -373,6 +373,7 @@ func (m *Model) getTransaction(trId string) (data []string, err error) {
 /// Symbols
 
 func (m *Model) createOrUpdateSymbol(symbol string) (err error) {
+	println("ANFKB_#RWJOQEWNDSFBJQ)TQEWJFDOSNKGALSDF)JAONSDFPASDJ)FANOSDFJ")
 	ex, _ := redis.Exists("sym:" + symbol)
 	if !ex {
 		redis.Set("sym:"+symbol, "")
@@ -386,6 +387,7 @@ func (m *Model) createOrUpdateSymbol(symbol string) (err error) {
 
 // Add shares to existing position or set shares to value if dne
 func (m *Model) addOrSetSharesToPosition(accountID string, symbol string, amount float64) (err error) {
+	println("@@@@@@@@ addOrSetSharesToPosition")
 	ex, _ := redis.HExists("acct:"+accountID+":positions", symbol)
 
 	if ex {
@@ -400,6 +402,7 @@ func (m *Model) addOrSetSharesToPosition(accountID string, symbol string, amount
 }
 
 func (m *Model) addSharesToPosition(accountID string, symbol string, amount float64) (err error) {
+	println("@@@@@@@@ addSharesToPosition")
 
 	_, err = redis.HIncrByFloat("acct:"+accountID+":positions", symbol, amount)
 
@@ -410,6 +413,7 @@ func (m *Model) addSharesToPosition(accountID string, symbol string, amount floa
 }
 
 func (m *Model) updatePosition(accountID string, symbol string, amount float64) (err error) {
+	println("@@@@@@@@ updatePosition")
 	positionExists := false
 	fetchQuery := fmt.Sprintf(`SELECT amount FROM position WHERE account_id='%s' AND symbol='%s'`, accountID, symbol)
 	var currentAmount float64
@@ -427,6 +431,7 @@ func (m *Model) updatePosition(accountID string, symbol string, amount float64) 
 }
 
 func (m *Model) removePosition(accountID string, symbol string) (err error) {
+	println("@@@@@@@@ removePosition")
 	// TODO: Update cache
 	sqlQuery := fmt.Sprintf(`DELETE FROM position WHERE account_id='%s' AND symbol='%s';`, accountID, symbol)
 	m.submitQuery(sqlQuery)
