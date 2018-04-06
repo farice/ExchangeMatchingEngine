@@ -345,6 +345,8 @@ func (m *Model) transactionExists(transId string) (ex bool, err error) {
 
 	return
 }
+
+// open an order
 func (m *Model) createTransaction(transId string, acctId string, sym string, limit string, amount string, transactionTime time.Time) (err error) {
 	// TODO: Create in redis
 	conn := redis.Pool.Get()

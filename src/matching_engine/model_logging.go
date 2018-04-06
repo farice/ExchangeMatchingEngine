@@ -18,6 +18,15 @@ func outputDatabaseStateTruncated(rowLimit int) {
 	outputTransactions(rowLimit)
 }
 
+func logAccount(acctId string) {
+	bal, _ := SharedModel().getAccountBalance(acctId)
+
+	log.WithFields(log.Fields{
+		"ID":             acctId,
+		"Balance":        bal,
+	}).Info("Log Account")
+}
+
 func outputAccounts(rowLimit int) {
 	tableName := "account"
 	rows, err := SharedModel().db.Query(fmt.Sprintf("SELECT * FROM %s LIMIT %d", tableName, rowLimit))
