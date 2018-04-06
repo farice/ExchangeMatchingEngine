@@ -402,10 +402,21 @@ func (m *Model) addOrSetSharesToPosition(accountID string, symbol string, amount
 	if ex {
 		return m.addSharesToPosition(accountID, symbol, amount)
 	} else {
-		err = redis.SetField("acct:"+accountID+":positions", symbol, amount)
+		// Check if exists in postgres
+		fetchQuery := fmt.Sprintf(`SELECT amount FROM position WHERE account_id='%s' AND symbol='%s'`, accountID, symbol)
+		var currentAmount float64
+		currentAmount = amount
+		sqlErr := m.db.QueryRow(fetchQuery).Scan(&currentAmount)
+		err = redis.SetField("acct:"+accountID+":positions", symbol, currentAmount)
+		// If was in the db, still need to add the amount
+		if sqlErr == nil {
+			m.addSharesToPosition(accountID, symbol, amount)
+		} else {
+			// Create in DB
+			sqlQuery := fmt.Sprintf(`INSERT INTO position(account_id, symbol, amount) VALUES('%s', '%s', %f)`, accountID, symbol, amount)
+			m.submitQuery(sqlQuery)
+		}
 	}
-
-	// TODO - Postgres
 
 	return
 }
@@ -440,8 +451,6 @@ func (m *Model) addSharesToPosition(accountID string, symbol string, amount floa
 // }
 
 func (m *Model) removePosition(accountID string, symbol string) (err error) {
-	println("@@@@@@@@ removePosition")
-	// TODO: Update cache
 	sqlQuery := fmt.Sprintf(`DELETE FROM position WHERE account_id='%s' AND symbol='%s';`, accountID, symbol)
 	m.submitQuery(sqlQuery)
 	return nil
@@ -492,6 +501,7 @@ func (m *Model) executeQueries() {
 	log.Info(fmt.Sprintf("Flushing SQL commands. There are %d commands in the buffer.", len(m.commands)))
 	for len(m.commands) > 0 {
 		s := <-m.commands
+		println("EXECUTING QUERY: ", s)
 		var query string
 		isDelete := strings.HasPrefix(s, "DELETE")
 		if isDelete {
