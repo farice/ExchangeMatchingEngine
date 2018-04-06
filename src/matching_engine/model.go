@@ -422,6 +422,10 @@ func (m *Model) getOrder(orderID string) (data []string, err error) {
 	defer conn.Close()
 	data, err = redigo.Strings(conn.Do("HMGET", "order:"+orderID, "account", "symbol", "limit", "amount", "origAmount"))
 
+	if (len(data) > 0 && data[0] != "") {
+		return
+	}
+
 	// postgres
 	var uid string
 	var accountID string
@@ -436,11 +440,14 @@ func (m *Model) getOrder(orderID string) (data []string, err error) {
 	if sqlErr == nil {
 		limitString := strconv.FormatFloat(limit, 'E', -1, 64)
 		amountString := strconv.FormatFloat(amount, 'E', -1, 64)
+		// "account", "symbol", "limit", "amount", "origAmount"
 		data = []string{
-			uid,
 			accountID,
 			symbol,
 			limitString,
+			// TODO - Confirm that this is remaining amount
+			amountString,
+			// TODO - Need to retrieve original amount
 			amountString,
 		}
 		return data, err
