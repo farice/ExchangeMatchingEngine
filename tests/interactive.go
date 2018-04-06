@@ -1,6 +1,7 @@
 package main
 
 import (
+  "flag"
   "fmt"
   "os"
   "encoding/xml"
@@ -39,6 +40,14 @@ func dial(req string) (status string, err error){
   return
 }
   func main() {
+
+    opPtr := flag.String("Operation", "transactions", "transactions or create")
+
+    numbPtr := flag.Int("numb", 42, "an int")
+    boolPtr := flag.Bool("fork", false, "a bool")
+
+    flag.Parse()
+
 program:
     for {
       var req = xml.Header
@@ -48,17 +57,11 @@ program:
       fmt.Scanf("%s", &cmd)
 
 
-      switch cmd {
+      switch *opPtr {
       case "create":
         req += "<create>\n"
 
-outer:
-        for {
-          fmt.Fprintf(os.Stdout,"Enter one of the following:\n\n-account\n-symbol\n-done\n\n")
-          var c_cmd string
-          fmt.Scanf("%s", &c_cmd)
-
-          switch c_cmd {
+          switch *opPtr {
           case "account":
             fmt.Fprintf(os.Stdout,"Account ID:\n")
             var acct_id string
@@ -79,7 +82,6 @@ outer:
 
           }
 
-        }
         len_req := strconv.Itoa((len(req)+1))
         req = len_req + "\n" + req
         req += "</create>"
