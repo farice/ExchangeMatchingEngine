@@ -143,7 +143,8 @@ func (m *Model) addAccountBalance(accountID string, amount float64) (err error) 
 		if err != nil {
 			// Likely non-existent account
 			log.Error(fmt.Sprintf(`SQL database error: %v -- query: %s`, err, sqlQuery))
-			return err
+			err = fmt.Errorf("Account does not exist")
+			return
 		}
 		// TODO: Add account to redis store
 		err = redis.SetField("acct:"+accountID, "balance", newBalance)
