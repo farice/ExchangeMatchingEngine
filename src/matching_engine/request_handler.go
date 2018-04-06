@@ -146,6 +146,8 @@ func (order *Order) handleBuy(acctId string, transId_str string, sym string, ord
 	// get open sell with lowest sell value
 	var members []string
 
+	println("ACQUIRING LOCK")
+
 	match_mux.Lock()
 	defer match_mux.Unlock() // in case exception is thrown, unlock when stack closes
 

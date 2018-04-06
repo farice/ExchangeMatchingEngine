@@ -351,6 +351,7 @@ func (m *Model) getMaximumBuyOrder(symbol string, priceLimit float64) (uid []str
 }
 
 func (m *Model) getMinimumSellOrder(symbol string, priceLimit float64) (uid []string, err error) {
+	log.Info("Get minimum sell order")
 	uid, err = redis.Zrange("open-sell:"+symbol, 0, 0, true)
 	if len(uid) > 0 && uid[0] != "" {
 		return
