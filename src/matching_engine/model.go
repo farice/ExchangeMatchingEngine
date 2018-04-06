@@ -422,9 +422,7 @@ func (m *Model) getOrder(orderID string) (data []string, err error) {
 	defer conn.Close()
 	data, err = redigo.Strings(conn.Do("HMGET", "order:"+orderID, "account", "symbol", "limit", "amount", "origAmount"))
 
-	if (len(data) > 0 && data[0] != "") {
-		return
-	}
+	/*
 
 	// postgres
 	var uid string
@@ -480,6 +478,7 @@ func (m *Model) getOrder(orderID string) (data []string, err error) {
 		}
 		return data, err
 	}
+	*/
 
 	return
 }
