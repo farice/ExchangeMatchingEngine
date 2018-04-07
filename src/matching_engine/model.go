@@ -18,7 +18,7 @@ import (
 const user = "postgres"
 const dbname = "exchange"
 const sslmode = "disable"
-const bufferCapacity = 10
+const bufferCapacity = 30
 
 // Singleton approach found here: http://marcio.io/2015/07/singleton-pattern-in-go/#comment-2132217074
 var initialized uint32
