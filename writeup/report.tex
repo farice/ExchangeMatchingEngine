@@ -96,7 +96,7 @@ Another important consideration is the datastore. Our initial design simply used
 
 % Explain methodology e.g. how we timed things
 
-We use a Python script (included in the testing folder) that generates the time that each function takes to complete. Hence, this allows us to measure the overhead of various categories of delays e.g. Query, Send/Receive, Parse, etc..
+We use a Python script (included in the testing folder) that generates the time that each function takes to complete. Hence, this allows us to measure the overhead of various categories of delays e.g. Query, Send/Receive, Parse, etc.. Therefore, these measurements allowed us to turn our focus to where can best improve scalability.
 
 \subsection{Scalability}
 
@@ -111,13 +111,13 @@ After running the above command at various request numbers, it is clear that the
 \begin{figure}[H]
 \centering
 \includegraphics[width=\linewidth]{read-query-times.png}
-\caption{Scalability Breakdown}
+\caption{Read Query Times}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\linewidth]{read-query-times-per-request.png}
-\caption{Scalability Breakdown}
+\caption{Read Query Times per Request}
 \end{figure}
 
 Time per request goes down as system time and communication overhead account for a smaller proportion of the overall runtime.
@@ -144,6 +144,6 @@ Furthermore, we tested for datastore failures my taking down the Redis and Postg
 
 Evidently, we found that using Redis as a cache seriously improved our ability to scale.
 
-Furthermore, we found that INSERT is our greatest bottleneck. One way we could mitigate this, if we were to continue working on this project is to ....
+Furthermore, we found that querying is our greatest bottleneck. One way we attempted to mitigate this, was using an in-memory cache and writing to a buffer in a queue on a separate thread. In the future, we'll look to improve the scheduling of flushing the buffer and also the eviction policy of the cache. For example, certain information, like open orders, should rarely be evicted. Hence, LRU may not be the perfect policy.
 
 \end{document}
