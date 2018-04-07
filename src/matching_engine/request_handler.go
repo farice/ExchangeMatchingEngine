@@ -14,7 +14,7 @@ import (
 
 var (
 	counter_mux sync.Mutex
-	match_mux   sync.Mutex // Mutex used to atomically match/execute orders
+	match_mux   sync.RWMutex // Mutex used to atomically match/execute orders
 )
 
 // Inc increments the counter for the given key.
@@ -389,8 +389,9 @@ func (q *Query) handleQuery() (resp string, err error) {
 		return
 	}
 
-	match_mux.Lock()
-	defer match_mux.Unlock()
+	// Read lock (allows concurrent queries)
+	match_mux.RLock()
+	defer match_mux.RUnlock()
 
 	status, err := getOrderStatus(trId)
 	if err != nil {
