@@ -146,4 +146,6 @@ Evidently, we found that using Redis as a cache seriously improved our ability t
 
 Furthermore, we found that querying is our greatest bottleneck. One way we attempted to mitigate this, was using an in-memory cache and writing to a buffer in a queue on a separate thread. In the future, we'll look to improve the scheduling of flushing the buffer and also the eviction policy of the cache. For example, certain information, like open orders, should rarely be evicted. Hence, LRU may not be the perfect policy.
 
+The project was a useful exercise in dealing with issues of concurrency and idempotency. We used several methods, mentioned above, to deal with this. Beyond  multi-threading and mutexes, we used goroutines, Reader-Writer locks, atomic datastore operations, rollbacks, and buffered database writes.
+
 \end{document}
