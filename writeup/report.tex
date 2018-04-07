@@ -96,7 +96,7 @@ Another important consideration is the datastore. Our initial design simply used
 
 % Explain methodology e.g. how we timed things
 
-We use a Python script (included in the testing folder) that generates the time that each function takes to complete. Hence, this allows us to measure the overhead of various categories of delays e.g. Query, Send/Receive, Parse, etc.. 
+We use a Python script (included in the testing folder) that generates the time that each function takes to complete. Hence, this allows us to measure the overhead of various categories of delays e.g. Query, Send/Receive, Parse, etc..
 
 \subsection{Scalability}
 
@@ -121,6 +121,18 @@ After running the above command at various request numbers, it is clear that the
 \end{figure}
 
 Time per request goes down as system time and communication overhead account for a smaller proportion of the overall runtime.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{handle_response_times.png}
+\caption{Scalability Breakdown}
+\end{figure}
+
+Another significant factor in runtime is handling persistence. While response times were improved with redis, it is clear there is improvement to be made in the buffer flush logic.
+
+By writing to a local buffer and flushing separately, we avoid slowing all queries but the response time on queries which trigger a buffer flush to the postgres database are delayed significantly.
+
+Given more time, we would improve the logic for scheduling buffer flushing, ideally updating the database at times of low traffic if possible. We might also be able to find a more optimal buffer size.
 
 \subsection{Correctness}
 
