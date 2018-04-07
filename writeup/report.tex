@@ -88,13 +88,15 @@ Furthermore, we parse the received XML as part of a stream which allows us to st
 
 When dealing with "transaction" and "create" requests, idempotency and atomicity become increasingly important because there are several places that a given request can fail. Hence, it was clear that we needed to execute certain operations atomically and rollback if a single command in the operation failed. For example, cancel transactions must both deposit money to a user's account and remove the open shares from the market. The first step of atomicity is solved using a simple mutex. Furthermore, if the shares can't be removed, then the transaction to deposit funds into the user's account is rolled back. We ignore cancel requests for transaction IDs which we've already cancelled. This provides idempotency. 
 
-Still, query transactions don't actually modify data so it seemed like an unecessary overhead to use the same mutex that we use for the other transactions. Hence, we decided to measure the effect a Reader-Writer Lock (RWMutex in Go) would have on our scalability. One concern we had was whether this could lead to deadlock. However, from the docs, if a goroutine holds a RWMutex for reading and another goroutine might call Lock, no goroutine should expect to be able to acquire a read lock until the initial read lock is released.
+Still, query transactions don't actually modify data so it seemed like an unecessary overhead to use the same mutex that we use for the other transactions. Hence, we decided to measure the effect a Reader-Writer Lock (RWMutex in Go) would have on our scalability. One concern we had was whether this could lead to deadlock between a waiting writer and many readers. However, from the docs, if a goroutine holds a RWMutex for reading and another goroutine might call Lock, no goroutine should expect to be able to acquire a read lock until the initial read lock is released.
 
-Another important consideration is the datastore. Our initial design simply used a hashmap, which provided great speed given that data would tend to reside in memory. We recognized that we needed some sort of database so that the server can go down without transaction history being permanently deleted. Our first choice was Postgres . Later, we wondered if we could recover the benefits we saw when we used a dictonary. Hence, we explored the possibility of using Redis as an in-memory cache. In our experiments below, we explore the effect it had on our scalability.
+Another important consideration is the datastore. Our initial design simply used a hashmap, which provided great speed given that data would tend to reside in memory. We recognized that we needed some sort of database so that the server can go down without transaction history being permanently deleted. Our first choice was Postgres because of its robustness and support for redundancy. Later, we wondered if we could recover the benefits we saw when we used an in-memory dictonary. Hence, we explored the possibility of using Redis as an in-memory cache. In our experiments below, we explore the effect it had on our scalability.
 
 \section{Experiments}
 
 % Explain methodology e.g. how we timed things
+
+We use a Python script (included in the testing folder) that generates the time that each function takes to complete. Hence, this allows us to measure the overhead of various categories of delays e.g. Query, Send/Receive, Parse, etc.. 
 
 \subsection{Scalability}
 
