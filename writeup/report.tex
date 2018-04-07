@@ -130,7 +130,7 @@ Time per request goes down as system time and communication overhead account for
 
 Another significant factor in runtime is handling persistence. While response times were improved with redis, it is clear there is improvement to be made in the buffer flush logic.
 
-By writing to a local buffer and flushing separately, we avoid slowing all queries but the response time on queries which trigger a buffer flush to the postgres database are delayed significantly.
+By writing to a local buffer and flushing separately, we avoid slowing all queries but the response time on queries. Golang buffered channels are thread-safe, allowing us to write without blocking to local memory. However, data must eventually be persisted; queries which trigger a buffer flush to the postgres database are delayed significantly.
 
 Given more time, we would improve the logic for scheduling buffer flushing, ideally updating the database at times of low traffic if possible. We might also be able to find a more optimal buffer size.
 
