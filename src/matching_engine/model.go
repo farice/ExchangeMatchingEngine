@@ -125,6 +125,9 @@ func (m *Model) getAccountBalance(accountID string) (balance float64, err error)
 	bal, err := redis.GetField("acct:"+accountID, "balance")
 	if bal != nil && err == nil {
 		balance, err = strconv.ParseFloat(string(bal.([]byte)), 64)
+		log.WithFields(log.Fields{
+			"balance": balance,
+		}).Info("Got balance")
 		return balance, nil
 	}
 
